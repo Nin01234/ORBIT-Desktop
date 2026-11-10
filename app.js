@@ -218,7 +218,7 @@ function showView(name){
   if(name==="audiobooks"){const books=$("#book-results");if(books&&!books.querySelector(".media-card"))loadBooks();}
   if(name==="favorites")refreshFavViews();
   if(name==="downloads")loadOfflineLibrary();
-  if(name==="omnisave"){const omni=$("#omnisave-webview");if(omni&&(!omni.src||omni.src==="about:blank"||omni.src.endsWith("about:blank")))omni.src="https://videodownloader.site/";}
+  if(name==="omnisave"&&!$("#omnisave-results")?.dataset.loaded){loadOmniMovies("classic films").then(()=>$("#omnisave-results").dataset.loaded="1");}
   window.scrollTo({top:0,behavior:"smooth"});
 }
 function initGlobe(){
@@ -696,6 +696,27 @@ function playOffline(id,kind,title){
   currentOfflineAudioId=null;clearYoutubePlayer();currentStation=null;currentMusicTrack=null;audio.src=src;
   audio.play().then(()=>setPlayer(title,"Saved on this device","Offline audio")).catch(()=>notify("This offline file could not be played."));
 }
+async function loadOmniMovies(term="classic films",append=false){
+  const host=$("#omnisave-results"),status=$("#omnisave-status");if(!host)return;
+  const q=String(term||"classic films").trim();const source=$("#omnisave-source")?.value||"all";
+  const page=append?(Number(window.__orbitMovieDiscoveryPage)||1)+1:1;
+  if(!append){window.__orbitMovieDiscoveryPage=0;window.__orbitMovieDiscoveryQuery=q;host.innerHTML='<div class="loading-card">Searching Internet Archive, Prelinger, Library of Congress, NASA and Wikimedia…</div>';}
+  const more=$("#omnisave-load-more");if(more){more.disabled=true;more.textContent="Loading…";}
+  try{
+    const r=await fetch("/api/movie-discovery?q="+encodeURIComponent(q)+"&page="+page+"&source="+encodeURIComponent(source),{signal:AbortSignal.timeout(35000),cache:"no-store"});if(!r.ok)throw Error("Movie catalogues returned "+r.status);
+    const data=await r.json();const films=Array.isArray(data.results)?data.results:[];
+    const cards=films.map(f=>{
+      const actions=f.playType==="archive"?'<button data-film-play="'+esc(f.archiveId)+'" data-title="'+esc(f.title)+'">Watch in ORBIT</button>'+(f.downloadAllowed?'<button data-download-film="'+esc(f.archiveId)+'" data-title="'+esc(f.title)+'">Download</button>':""):'<a class="button button-light" href="'+esc(f.watchUrl)+'" target="_blank" rel="noopener noreferrer">Open source ↗</a>';
+      return '<article class="media-card film-card"><img class="media-cover film-cover" src="'+esc(f.artwork||"")+'" alt="" loading="lazy" onerror="this.style.display=\'none\'"><h3 title="'+esc(f.title||"Film")+'">'+esc(f.title||"Film")+'</h3><p>'+esc(f.year||"Year not listed")+' · '+esc(f.creator||"Not listed")+'</p><div class="media-actions"><small>'+esc(f.source||"Movie archive")+'</small><div class="music-card-actions">'+actions+'</div><small class="movie-rights-note">'+esc(f.license||"Check source rights")+'</small></div></article>';
+    }).join("");
+    if(!append)host.innerHTML="";if(cards)host.insertAdjacentHTML("beforeend",cards);
+    if(!films.length&&!append)host.innerHTML='<div class="empty-state">No matches in these catalogues. Try a broader title or another source.</div>';
+    window.__orbitMovieDiscoveryPage=page;
+    const dirs=$("#omnisave-source-links");if(dirs)dirs.innerHTML=(data.directories||[]).map(x=>'<a class="button button-outline" href="'+esc(x.url)+'" target="_blank" rel="noopener noreferrer">Explore '+esc(x.name)+' ↗</a>').join("");
+    if(status)status.textContent=(append?"Loaded another ":"Found ")+films.length+" catalogue entries. "+(data.sourceErrors?.length?"Some sources did not respond. ":"")+"Only Internet Archive / Prelinger Public Domain Mark items have ORBIT download buttons.";
+    if(more){more.hidden=!data.hasMore||films.length===0;more.disabled=false;more.textContent="Load more results";}
+  }catch(e){if(!append)host.innerHTML='<div class="empty-state">Movie search could not connect. Check your connection and try again.</div>';if(status)status.textContent="Search failed: "+(e?.message||"catalogue unavailable");if(more){more.hidden=true;more.disabled=false;more.textContent="Load more results";}}
+}
 function bookCard(b){const title=b.title||"Audiobook";const author=Array.isArray(b.authors)?b.authors.map(a=>[a.first_name,a.last_name].filter(Boolean).join(" ")).join(", "):"Public domain";return '<article class="media-card book-card"><div class="media-cover book-cover">BOOK</div><h3 title="'+esc(title)+'">'+esc(title)+'</h3><p>'+esc(author)+'</p><div class="media-actions"><small>LibriVox · free</small><button data-bookplay="'+esc(b.url_rss||"")+'" data-title="'+esc(title)+'">Chapters</button></div></article>';}
 async function loadBooks(term=""){
   const host=$("#book-results");host.innerHTML='<div class="loading-card">Searching the LibriVox catalogue…</div>';
@@ -983,6 +1004,9 @@ function setupEvents(){
   $("#omnisave-reload")?.addEventListener("click",()=>omni?.reload());
   $("#omnisave-open-external")?.addEventListener("click",()=>window.open("https://videodownloader.site/","_blank"));
   $$("[data-go]").forEach(b=>b.addEventListener("click",()=>showView(b.dataset.go)));
+  $("#omnisave-search-form")?.addEventListener("submit",e=>{e.preventDefault();const q=$("#omnisave-query")?.value.trim();if(!q){notify("Enter a movie title to search.");return;}loadOmniMovies(q).then(()=>$("#omnisave-results").dataset.loaded="1");});
+  $("#omnisave-source")?.addEventListener("change",()=>loadOmniMovies($("#omnisave-query")?.value.trim()||window.__orbitMovieDiscoveryQuery||"classic films"));
+  $("#omnisave-load-more")?.addEventListener("click",()=>loadOmniMovies(window.__orbitMovieDiscoveryQuery||"classic films",true));
   document.addEventListener("click",e=>{
     const play=e.target.closest("[data-play]");if(play){playStation(play.dataset.play);return;}
     const fav=e.target.closest("[data-fav]");if(fav){toggleFav(fav.dataset.fav);return;}

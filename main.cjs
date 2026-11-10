@@ -638,6 +638,7 @@ function createLocalServer(root) {
         const upstream=await fetch("https://archive.org/metadata/"+encodeURIComponent(id),{signal:AbortSignal.timeout(18000)});
         if(!upstream.ok){res.writeHead(502).end("Film metadata unavailable");return;}
         const meta=await upstream.json();
+        if(meta.metadata?.licenseurl!=="https://creativecommons.org/publicdomain/mark/1.0/"){res.writeHead(403).end("Downloads are enabled only for items marked Public Domain Mark 1.0.");return;}
         const file=(meta.files||[]).filter(f=>f.name&&[".mp4",".m4v",".webm"].some(ext=>f.name.toLowerCase().endsWith(ext))).sort((a,b)=>(Number(b.size)||0)-(Number(a.size)||0))[0];
         if(!file){res.writeHead(404).end("No downloadable video file is listed");return;}
         const url="https://archive.org/download/"+encodeURIComponent(id)+"/"+file.name.split("/").map(encodeURIComponent).join("/");
@@ -647,6 +648,36 @@ function createLocalServer(root) {
       return;
     }
 
+    if (requestUrl.pathname === "/api/movie-discovery") {
+      try {
+        const q = (requestUrl.searchParams.get("q") || "").trim().slice(0, 100);
+        const page = Math.max(1, Math.min(20, Number.parseInt(requestUrl.searchParams.get("page") || "1", 10) || 1));
+        const source = (requestUrl.searchParams.get("source") || "all").toLowerCase();
+        const clean = q.replace(/[^\p{L}\p{N}\s'-]/gu, " ").replace(/\s+/g, " ").trim();
+        const directories = term => [{name:"Library of Congress film search",sourceKey:"loc",url:"https://www.loc.gov/film-and-videos/?q="+encodeURIComponent(term||"")},{name:"National Film Board of Canada",sourceKey:"nfb",url:"https://www.nfb.ca/"},{name:"YouTube official movie search",sourceKey:"youtube",url:"https://www.youtube.com/results?search_query="+encodeURIComponent((term||"")+" full movie official")}];
+        if (clean.length < 2) { res.writeHead(200,{"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store"});res.end(JSON.stringify({results:[],page,hasMore:false,directories:directories(clean)}));return; }
+        const pd="https://creativecommons.org/publicdomain/mark/1.0/";
+        const blocked=/(sex|erotic|porn|xxx|nude|nudity|adult|hardcore|fetish|pervers|lust|orgasm|hentai|strip|playboy|pleasure|super.?girls|sexy|sensual|seduction)/i;
+        const safeItem=x=>!blocked.test([x.title,x.creator,x.description,...(Array.isArray(x.subject)?x.subject:[x.subject||""])].join(" "));
+        const tasks=[],taskKeys=[];const add=(key,fn)=>{if(source==="all"||source===key){taskKeys.push(key);tasks.push(fn());}};
+        const archiveSearch=async(key,collection)=>{
+          const phrase=clean.replace(/["\\]/g," ");
+          const query='mediatype:movies AND collection:'+collection+' AND licenseurl:"'+pd+'" AND (title:"'+phrase+'" OR creator:"'+phrase+'" OR subject:"'+phrase+'")';
+          const u=new URL("https://archive.org/advancedsearch.php");u.searchParams.set("q",query);
+          for(const f of ["identifier","title","year","creator","licenseurl","subject","description"])u.searchParams.append("fl[]",f);
+          u.searchParams.set("rows","16");u.searchParams.set("page",String(page));u.searchParams.set("output","json");u.searchParams.append("sort[]","downloads desc");
+          const response=await fetch(u,{signal:AbortSignal.timeout(22000)});if(!response.ok)throw Error("Archive unavailable");const data=await response.json();
+          return (data.response?.docs||[]).filter(x=>x.identifier&&x.licenseurl===pd&&safeItem(x)).map(x=>({id:key+":"+x.identifier,archiveId:x.identifier,source:key==="prelinger"?"Prelinger Archives":"Internet Archive",sourceKey:key,title:x.title||x.identifier,year:x.year||"",creator:Array.isArray(x.creator)?x.creator.slice(0,2).join(", "):(x.creator||"Not listed"),artwork:"https://archive.org/services/img/"+encodeURIComponent(x.identifier),watchUrl:"https://archive.org/details/"+encodeURIComponent(x.identifier),playType:"archive",license:"Public Domain Mark 1.0",downloadAllowed:true}));
+        };
+        add("archive",()=>archiveSearch("archive","feature_films"));add("prelinger",()=>archiveSearch("prelinger","prelinger"));
+        add("nasa",async()=>{const u=new URL("https://images-api.nasa.gov/search");u.searchParams.set("q",clean);u.searchParams.set("media_type","video");u.searchParams.set("page",String(page));const r=await fetch(u,{signal:AbortSignal.timeout(22000)});if(!r.ok)throw Error("NASA unavailable");const data=await r.json();return (data.collection?.items||[]).slice(0,16).map(x=>{const d=x.data?.[0]||{};return {id:"nasa:"+d.nasa_id,source:"NASA",sourceKey:"nasa",title:d.title||"NASA video",year:(d.date_created||"").slice(0,4),creator:d.center||"NASA",artwork:x.links?.find(l=>l.rel==="preview")?.href||"",watchUrl:"https://images.nasa.gov/details/"+encodeURIComponent(d.nasa_id||""),playType:"external",license:"NASA media — check item-specific restrictions",downloadAllowed:false};});});
+        add("commons",async()=>{const u=new URL("https://commons.wikimedia.org/w/api.php");for(const [k,v] of Object.entries({action:"query",format:"json",generator:"search",gsrsearch:"filetype:video "+clean,gsrnamespace:"6",gsrlimit:"16",gsroffset:String((page-1)*16),prop:"imageinfo",iiprop:"url|extmetadata",iiurlwidth:"320"}))u.searchParams.set(k,v);const r=await fetch(u,{signal:AbortSignal.timeout(22000)});if(!r.ok)throw Error("Commons unavailable");const data=await r.json();return Object.values(data.query?.pages||{}).map(x=>{const ii=x.imageinfo?.[0]||{},m=ii.extmetadata||{},license=(m.LicenseShortName?.value||m.UsageTerms?.value||"Check file page").replace(/<[^>]*>/g,"").slice(0,100);return {id:"commons:"+x.pageid,source:"Wikimedia Commons",sourceKey:"commons",title:String(x.title||"Video file").replace(/^File:/,""),year:"",creator:m.Artist?.value?.replace(/<[^>]*>/g,"").slice(0,100)||"Community upload",artwork:ii.thumburl||"",watchUrl:"https://commons.wikimedia.org/wiki/"+encodeURIComponent(x.title||"").replace(/%3A/g,":"),playType:"external",license,downloadAllowed:false};});});
+        const settled=await Promise.allSettled(tasks);const results=settled.flatMap(x=>x.status==="fulfilled"?x.value:[]);
+        res.writeHead(200,{"Content-Type":"application/json; charset=utf-8","Cache-Control":"public, max-age=300","X-Content-Type-Options":"nosniff"});
+        res.end(JSON.stringify({results,page,hasMore:results.length>=12,directories:directories(clean),sourceErrors:settled.map((x,i)=>x.status==="rejected"?{source:taskKeys[i],message:String(x.reason?.message||"unavailable").slice(0,120)}:null).filter(Boolean)}));
+      } catch {res.writeHead(502).end("Could not retrieve movie catalogues");}
+      return;
+    }
     if (requestUrl.pathname === "/api/films") {
       try {
         const term = (requestUrl.searchParams.get("q") || "").trim().slice(0, 80);
