@@ -950,17 +950,7 @@ async function createWindow(port) {
       if (/^https:\/\//i.test(url)) shell.openExternal(url);
       return { action: "deny" };
     });
-    // For the YouTube webview partition: strip X-Frame-Options and CSP so the full watch page renders correctly
-    try {
-      const ytUrls = ["*://*.youtube.com/*", "*://*.youtu.be/*", "*://*.googlevideo.com/*", "*://*.ggpht.com/*", "*://*.ytimg.com/*"];
-      webContents.session.webRequest.onHeadersReceived({ urls: ytUrls }, (details, callback) => {
-        const h = Object.assign({}, details.responseHeaders);
-        delete h["x-frame-options"]; delete h["X-Frame-Options"];
-        delete h["content-security-policy"]; delete h["Content-Security-Policy"];
-        delete h["content-security-policy-report-only"]; delete h["Content-Security-Policy-Report-Only"];
-        callback({ responseHeaders: h });
-      });
-    } catch (_e) { /* non-YouTube webview session, skip */ }
+
   });
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https:\/\//i.test(url)) shell.openExternal(url);

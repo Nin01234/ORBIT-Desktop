@@ -627,7 +627,7 @@ function playYouTubeVideo(id,title,artist){
     panel.style.aspectRatio="auto";
     panel.style.height="auto";
     panel.style.maxHeight="none";
-    const embedUrl="https://www.youtube.com/embed/"+encodeURIComponent(id)+"?autoplay=1&rel=0&playsinline=1&enablejsapi=1&origin="+encodeURIComponent(location.origin);
+    const embedUrl="https://www.youtube-nocookie.com/embed/"+encodeURIComponent(id)+"?autoplay=1&rel=0&playsinline=1&enablejsapi=1&origin="+encodeURIComponent(location.origin);
     panel.innerHTML='<div class="orbit-youtube-frame" style="width:100%;aspect-ratio:16/9;position:relative;background:#000;overflow:hidden;"><iframe class="youtube-embed" src="'+embedUrl+'" title="'+esc(title)+'" referrerpolicy="strict-origin-when-cross-origin" allow="autoplay; encrypted-media; picture-in-picture; web-share; fullscreen" allowfullscreen></iframe></div>'+
       '<div class="youtube-player-subbar" style="display:flex;align-items:center;gap:12px;padding:10px 14px;background:rgba(13,21,30,0.92);border-radius:0 0 8px 8px;font-size:13px;border:1px solid rgba(255,255,255,0.06);border-top:none;"><span>Playing: <b>'+esc(title)+'</b> &bull; '+esc(artist)+'</span></div>';
   }
