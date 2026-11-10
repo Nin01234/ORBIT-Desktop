@@ -28,3 +28,9 @@ jobs:
         with:
           files: dist/ORBIT-Setup-*-x64.exe
           generate_release_notes: true
+          body: |
+            ORBIT Desktop Windows x64 installer.
+
+            **Code signing policy:** https://github.com/Nin01234/ORBIT-Desktop/blob/main/CODE_SIGNING_POLICY.md
+
+            **Signing status:** This release is unsigned. The SignPath Foundation application has not yet been approved.
