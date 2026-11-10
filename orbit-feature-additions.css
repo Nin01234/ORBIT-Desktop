@@ -442,3 +442,31 @@ html[data-theme="light"] .live-dot{background:#b8874b!important;box-shadow:none!
 .discover-submenu .nav-link{min-height:42px!important;height:42px!important;display:flex!important;flex-direction:row!important;justify-content:flex-start!important;padding:8px 12px!important;font-size:12px!important;overflow:visible}
 .search-submit{flex-basis:32px;width:32px;height:32px}
 }
+
+/* ORBIT desktop light-mode accessibility refinements */
+html[data-theme="light"]{--lime:#b8874b;--accent:#b8874b;color-scheme:light}
+html[data-theme="light"] .brand-mark,html[data-theme="light"] .brand-mark span,
+html[data-theme="light"] .brand-dot{border-color:#b8874b!important;color:#b8874b!important}
+html[data-theme="light"] .button,html[data-theme="light"] button.primary,
+html[data-theme="light"] .search-submit:hover,html[data-theme="light"] .button-primary{
+ background:#b8874b!important;color:#fff!important;border-color:#b8874b!important
+}
+html[data-theme="light"] #youtube-player-panel,html[data-theme="light"] #film-player-panel,
+html[data-theme="light"] .podcast-player-panel{background:#fff!important;color:#17231d!important}
+html[data-theme="light"] #track-seek,html[data-theme="light"] input[type="range"],
+html[data-theme="light"] input[type="checkbox"]{accent-color:#b8874b!important}
+html[data-theme="light"] #player-art,html[data-theme="light"] .player-art{
+ background-image:linear-gradient(135deg,#cba26d,#8d6c46)!important
+}
+html[data-theme="light"] #view-downloads [data-offline-delete]{
+ background:#fff5f5!important;color:#a83232!important;border:1px solid #a83232!important
+}
+html[data-theme="light"] .discover-submenu,html[data-theme="light"] .profile-dialog,
+html[data-theme="light"] .profile-modal{
+ background:#fff!important;color:var(--ink)!important;
+ box-shadow:0 12px 36px rgba(0,0,0,.12)!important;border-color:var(--line)!important
+}
+html[data-theme="light"] .discover-submenu .nav-link,
+html[data-theme="light"] .profile-dialog label{color:var(--ink)!important}
+.book-chapters{grid-column:1/-1;padding:16px;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
+.book-chapters h3{margin:0 0 12px}

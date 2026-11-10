@@ -7,7 +7,7 @@ ORBIT is an independent Windows desktop application for discovering and listenin
 ## Project status
 
 - Desktop application: Electron-based Windows app.
-- Current source version: 1.1.3.
+- Current source version: 1.1.4.
 - License: MIT (see `LICENSE`).
 - Windows installer: unsigned at present. Windows SmartScreen may show a warning until a trusted code-signing certificate is configured and the signed releases establish reputation.
 

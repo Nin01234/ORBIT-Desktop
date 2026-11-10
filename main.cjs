@@ -48,7 +48,13 @@ function isAllowedMediaUrl(value){
 }
 ipcMain.handle("orbit:offline-list",()=>readOfflineManifest());
 ipcMain.handle("orbit:offline-download",async(_event,item)=>{
-  if(!item||typeof item.url!=="string"||!isAllowedMediaUrl(item.url))throw new Error("This provider does not permit downloads through ORBIT.");
+  const localPort=localServer?.address()?.port;
+  let localAudiusProxy=false;
+  try{
+    const candidate=new URL(item?.url||"");
+    localAudiusProxy=!!localPort&&candidate.protocol==="http:"&&candidate.hostname==="127.0.0.1"&&Number(candidate.port)===localPort&&/^\/api\/audius-(?:stream|download)$/.test(candidate.pathname)&&/^\d{1,16}$/.test(candidate.searchParams.get("id")||"");
+  }catch{}
+  if(!item||typeof item.url!=="string"||(!isAllowedMediaUrl(item.url)&&!localAudiusProxy))throw new Error("This provider does not permit downloads through ORBIT.");
   const controller=new AbortController();
   const timeout=setTimeout(()=>controller.abort(new Error("Download timed out. Try again on a stronger connection.")),10*60*1000);
   let tempPath="";
@@ -58,7 +64,8 @@ ipcMain.handle("orbit:offline-download",async(_event,item)=>{
     if(!response.body)throw new Error("The provider returned an empty response.");
     const audiusStream=/^https:\/\/api\.audius\.co\/v1\/tracks\/\d+\/stream(?:\?|$)/i.test(item.url);
     const finalUrl=new URL(response.url);
-    const trustedFinalHost=isAllowedMediaUrl(response.url)||(audiusStream&&finalUrl.protocol==="https:"&&!finalUrl.username&&!finalUrl.password&&!require("node:net").isIP(finalUrl.hostname));
+    const trustedLocalProxy=localAudiusProxy&&finalUrl.protocol==="http:"&&finalUrl.hostname==="127.0.0.1"&&Number(finalUrl.port)===localPort&&/^\/api\/audius-(?:stream|download)$/.test(finalUrl.pathname);
+    const trustedFinalHost=isAllowedMediaUrl(response.url)||trustedLocalProxy||(audiusStream&&finalUrl.protocol==="https:"&&!finalUrl.username&&!finalUrl.password&&!require("node:net").isIP(finalUrl.hostname));
     if(!trustedFinalHost)throw new Error("The provider redirected the download to a host ORBIT does not trust.");
     const declared=Number(response.headers.get("content-length")||0);
     if(declared>500*1024*1024)throw new Error("This file is larger than ORBIT's 500 MB offline limit.");
@@ -526,7 +533,7 @@ function createLocalServer(root) {
       return;
     }
 
-    if (requestUrl.pathname === "/api/audius-stream") {
+    if (requestUrl.pathname === "/api/audius-stream" || requestUrl.pathname === "/api/audius-download") {
       try {
         const id = requestUrl.searchParams.get("id") || "";
         if (!/^\d{1,16}$/.test(id)) { res.writeHead(400).end("Invalid track"); return; }
@@ -546,8 +553,12 @@ function createLocalServer(root) {
           const value = upstream.headers.get(name);
           if (value) responseHeaders[name] = value;
         }
+        if(requestUrl.pathname==="/api/audius-download")responseHeaders["Content-Disposition"]='attachment; filename="orbit-track-'+id+'.mp3"';
         res.writeHead(upstream.status, responseHeaders);
-        Readable.fromWeb(upstream.body).on("error", () => res.destroy()).pipe(res);
+        const stream=Readable.fromWeb(upstream.body);
+        stream.on("error",error=>{if(error?.code!=="ECONNRESET"&&!res.headersSent&&!res.destroyed)res.writeHead(502);if(!res.destroyed)res.destroy();});
+        res.on("close",()=>{if(!stream.destroyed)stream.destroy();});
+        stream.pipe(res);
       } catch { if (!res.headersSent) res.writeHead(502).end("Music stream unavailable"); else res.destroy(); }
       return;
     }
@@ -760,11 +771,12 @@ function createLocalServer(root) {
     if (requestUrl.pathname === "/api/librivox") {
       try {
         const apiUrl = new URL(requestUrl.searchParams.get("url") || "");
-        if (apiUrl.protocol !== "https:" || apiUrl.hostname !== "librivox.org" || apiUrl.pathname !== "/api/feed/audiobooks/") {
+        if (apiUrl.protocol !== "https:" || apiUrl.hostname !== "librivox.org" || !/^\/api\/feed\/audiobooks\/?$/.test(apiUrl.pathname)) {
           res.writeHead(400).end("Only the LibriVox audiobook catalogue is supported"); return;
         }
         const upstream = await fetch(apiUrl, { signal: AbortSignal.timeout(12000) });
-        if (!upstream.ok) { res.writeHead(upstream.status).end("Catalogue unavailable"); return; }
+        if (upstream.status === 404) { res.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "X-Content-Type-Options": "nosniff" }); res.end(JSON.stringify({books:[]})); return; }
+        if (!upstream.ok) { res.writeHead(upstream.status).end("Catalogue unavailable"); return;}
         res.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "X-Content-Type-Options": "nosniff" });
         res.end(await upstream.text());
       } catch { res.writeHead(502).end("Could not retrieve LibriVox catalogue"); }
@@ -791,7 +803,7 @@ function createLocalServer(root) {
     if (pathname === "/") pathname = "/index.html";
     const target = path.resolve(root, "." + pathname);
     const relativePath = path.relative(root, target).replace(/\\/g, "/");
-    const allowedAsset = ["index.html","styles.css","orbit-feature-additions.css","orbit-ui-fixes-20261109.css","orbit-mobile.css","orbit-mobile-polish.css","orbit-mobile-landing.css","orbit-mobile-hero.svg","mobile-bridge.js","app.js","manifest.webmanifest","sw.js"].includes(relativePath) || /^icons\/[A-Za-z0-9._-]+\.png$/i.test(relativePath);
+    const allowedAsset = ["index.html","styles.css","orbit-feature-additions.css","orbit-ui-fixes-20261109.css","orbit-mobile.css","orbit-mobile-polish.css","orbit-mobile-landing.css","orbit-mobile-hero.svg","orbit-mobile-radio.svg","orbit-mobile-music.svg","orbit-mobile-movies.svg","orbit-mobile-offline.svg","orbit-mobile-podcasts.svg","mobile-bridge.js","app.js","manifest.webmanifest","sw.js"].includes(relativePath) || /^icons\/[A-Za-z0-9._-]+\.png$/i.test(relativePath);
     if (!target.startsWith(root + path.sep) || !allowedAsset) {
       res.writeHead(404).end("Not found"); return;
     }
@@ -853,7 +865,7 @@ function registerOmniSaveDownloads() {
     const allowed = new Set([".mp4", ".webm", ".m4v", ".mov", ".mkv", ".avi"]);
     const isVideo = mimeType.startsWith("video/") || allowed.has(sourceExt);
     const label = path.basename(originalName, sourceExt).slice(0, 100) || "OmniSave download";
-    report({ state: "started", title: label, message: isVideo ? "Video download startedÃ¢â‚¬Â¦" : "Download detected. This file type is not added to Offline Movies." });
+    report({ state: "started", title: label, message: isVideo ? "Video download started…" : "Download detected. This file type is not added to Offline Movies." });
     if (!isVideo) return;
     const safeBase = label.replace(/[<>:"/\\|?*\x00-\x1f]/g, "_").replace(/\s+/g, " ") || "ORBIT video";
     const finalExt = allowed.has(sourceExt) ? sourceExt : (mimeType.includes("webm") ? ".webm" : ".mp4");
@@ -865,7 +877,7 @@ function registerOmniSaveDownloads() {
         const total = item.getTotalBytes();
         const received = item.getReceivedBytes();
         const percent = total > 0 ? Math.min(100, Math.round(received * 100 / total)) : null;
-        report({ state: "progress", title: safeBase, received, total, percent, message: percent === null ? "Downloading " + safeBase + "Ã¢â‚¬Â¦" : "Downloading " + safeBase + " Ã¢â‚¬â€ " + percent + "%" });
+        report({ state: "progress", title: safeBase, received, total, percent, message: percent === null ? "Downloading " + safeBase + "…" : "Downloading " + safeBase + " Ã¢â‚¬â€ " + percent + "%" });
       } else if (state === "interrupted") {
         report({ state: "error", title: safeBase, message: "Download interrupted. Try again from OmniSave." });
       }
@@ -903,7 +915,7 @@ ipcMain.handle("orbit:spotify-open", async () => {
   }
   spotifyWindow = new BrowserWindow({
     width: 1280, height: 850, minWidth: 900, minHeight: 620,
-    title: "Spotify Ã‚Â· ORBIT",
+    title: "Spotify Ã‚· ORBIT",
     backgroundColor: "#121212",
     autoHideMenuBar: true,
     webPreferences: {
