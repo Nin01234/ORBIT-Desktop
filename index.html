@@ -141,18 +141,23 @@
 </section>
 
       <section class="view" id="view-omnisave">
-  <div class="page-intro"><div><h1>OmniSave Movies.</h1><p>Search Internet Archive, Prelinger, NASA and Wikimedia. Open official Library of Congress, National Film Board and YouTube catalogues for other titles.</p></div></div>
-  <div class="omnisave-import-panel" style="margin:0 0 18px;padding:18px;border:1px solid var(--line,#26333d);border-radius:14px;background:var(--panel,#111a22)">
-    <form id="omnisave-search-form" style="display:flex;gap:10px;flex-wrap:wrap">
-      <input id="omnisave-query" type="search" placeholder="Search movie title, e.g. Night of the Living Dead" aria-label="Search movie catalogues" style="flex:1;min-width:220px">
-      <button class="button button-light" id="omnisave-search-button" type="submit">Search movies</button>
-      <select id="omnisave-source" aria-label="Filter movie source" style="min-width:190px"><option value="all">All movie libraries</option><option value="archive">Internet Archive</option><option value="prelinger">Prelinger Archives</option><option value="nasa">NASA videos</option><option value="commons">Wikimedia Commons</option></select>
-    </form>
-    <p id="omnisave-status" role="status" style="margin:10px 0 0;color:var(--muted,#9aa8b5)">Download is enabled only for Public Domain Mark records from Internet Archive and Prelinger. Other catalogues open their original source pages.</p>
-    <div id="omnisave-source-links" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"></div>
+
+
+  <div class="omnisave-frame-wrap">
+    <webview id="omnisave-webview" src="about:blank" partition="persist:orbit-omnisave" webpreferences="contextIsolation=yes,nodeIntegration=no,sandbox=yes" title="ORBIT video search"></webview>
+    <iframe id="omnisave-browser-frame" title="OmniSave video downloader" loading="eager" referrerpolicy="strict-origin-when-cross-origin" allow="clipboard-read; clipboard-write" src="about:blank"></iframe>
+    <div class="omnisave-browser-help"><span>If OmniSave does not load here, open it directly:</span> <a href="https://videodownloader.site/" target="_blank" rel="noopener noreferrer">Open OmniSave in a new tab</a></div>
   </div>
-  <div class="media-grid" id="omnisave-results"><div class="loading-card">Loading movie catalogues…</div></div>
-  <div style="display:flex;justify-content:center;margin:18px 0"><button class="button button-outline" id="omnisave-load-more" type="button" hidden>Load more results</button></div>
+  <script>
+    (() => {
+      const isDesktopBrowser = !window.orbitDesktop?.isDesktop && window.matchMedia('(min-width: 801px)').matches;
+      if (!isDesktopBrowser) return;
+      document.documentElement.classList.add('orbit-web-omnisave');
+      const frame = document.getElementById('omnisave-browser-frame');
+      if (frame) frame.src = 'https://videodownloader.site/';
+    })();
+  </script>
+
 </section>
 <section class="view" id="view-favorites">
   <div class="page-intro"><div><h1>Saved for later.</h1><p>Your favourite stations and music, kept close on this device.</p></div></div>
