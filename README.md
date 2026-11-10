@@ -57,3 +57,9 @@ ORBIT uses independent public services and catalogues, including Radio Browser, 
 ## Maintainer
 
 Nino Brown / ORBIT
+
+## Policies
+
+- [Code signing policy](CODE_SIGNING_POLICY.md)
+- [Privacy notice](PRIVACY.md)
+
