@@ -1,4 +1,4 @@
-﻿# ORBIT Code Signing Policy
+# ORBIT Code Signing Policy
 
 **Status:** ORBIT intends to apply to the SignPath Foundation open-source code-signing program. The application has not been approved, and current Windows installers remain unsigned. Do not assume that a download is signed until its Windows file properties show a valid Authenticode signature.
 
