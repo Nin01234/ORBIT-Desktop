@@ -394,16 +394,17 @@ html[data-theme="light"] .live-dot{background:#b8874b!important;box-shadow:none!
 
 
 
-/* WEB-ONLY OmniSave browser frame. Deliberately inactive in Electron and narrow/mobile layouts. */
-@media (min-width: 801px) {
-  html.orbit-web-omnisave #view-omnisave .omnisave-frame-wrap { position:relative; display:flex; flex-direction:column; min-height:520px; }
-  html.orbit-web-omnisave #view-omnisave #omnisave-webview { display:none !important; }
-  html.orbit-web-omnisave #view-omnisave #omnisave-browser-frame { display:block; flex:1 1 auto; width:100%; height:auto; min-height:0; border:0; background:#fff; }
-  html.orbit-web-omnisave #view-omnisave .omnisave-browser-help { display:flex; justify-content:center; align-items:center; flex-wrap:wrap; gap:7px; padding:8px 12px; color:#4b5563; background:#f5f7f8; border-top:1px solid #d9dfda; font-size:12px; }
-  html.orbit-web-omnisave #view-omnisave .omnisave-browser-help a { color:#1769aa; font-weight:600; text-decoration:underline; }
-}
+/* Browser OmniSave fallback: use the embedded provider page outside Electron on desktop and mobile. */
+html.orbit-web-omnisave #view-omnisave .omnisave-frame-wrap { position:relative; display:flex; flex-direction:column; min-height:520px; }
+html.orbit-web-omnisave #view-omnisave #omnisave-webview { display:none !important; }
+html.orbit-web-omnisave #view-omnisave #omnisave-browser-frame { display:block; flex:1 1 auto; width:100%; height:auto; min-height:0; border:0; background:#fff; }
+html.orbit-web-omnisave #view-omnisave .omnisave-browser-help { display:flex; justify-content:center; align-items:center; flex-wrap:wrap; gap:7px; padding:8px 12px; color:#4b5563; background:#f5f7f8; border-top:1px solid #d9dfda; font-size:12px; }
+html.orbit-web-omnisave #view-omnisave .omnisave-browser-help a { color:#1769aa; font-weight:600; text-decoration:underline; }
+html.orbit-web-omnisave #view-omnisave #omnisave-back,
+html.orbit-web-omnisave #view-omnisave #omnisave-forward { display:none !important; }
 @media (max-width: 800px) {
-  #view-omnisave #omnisave-browser-frame, #view-omnisave .omnisave-browser-help { display:none !important; }
+  html.orbit-web-omnisave #view-omnisave .omnisave-frame-wrap { height:calc(100dvh - 220px); min-height:360px; max-height:none; }
+  html.orbit-web-omnisave #view-omnisave .omnisave-toolbar { align-items:flex-start; }
 }
 
 /* ORBIT web readability: consistent public-facing type scale on desktop browsers. */
@@ -551,3 +552,38 @@ iframe:fullscreen,
  .player-bar.is-floating .control-button{font-size:11px!important;}
  .player-bar.is-floating .track-progress{max-width:100%!important;width:100%!important;}
 }
+
+/* Keep the desktop launcher and half-width player panel aligned while dragging. */
+@media(min-width:851px){
+ .player-reveal{left:var(--orbit-player-reveal-left,16px)!important;right:auto!important;bottom:auto!important}
+ .player-bar.is-floating{left:var(--orbit-player-panel-left,8px)!important;right:auto!important;top:var(--orbit-player-top,100px)!important;bottom:auto!important}
+}
+/* Fix: keep the expanded player fully inside the screen when its launcher is dragged to either edge. */
+@media(max-width:850px){
+ body.mobile-player-open .player-reveal.player-reveal{
+  left:var(--orbit-player-reveal-left,12px)!important;right:auto!important;
+  bottom:auto!important;
+ }
+ body.mobile-player-open .player-bar.is-floating{
+  left:var(--orbit-player-panel-left,8px)!important;right:auto!important;
+  top:var(--orbit-player-panel-top,8px)!important;bottom:auto!important;
+  width:min(340px,calc(100vw - 16px))!important;max-width:calc(100vw - 16px)!important;
+  box-sizing:border-box!important;
+ }
+}
+@media(min-width:851px){
+ .player-reveal{left:var(--orbit-player-reveal-left,16px)!important;right:auto!important}
+ .player-bar.is-floating{
+  left:var(--orbit-player-panel-left,8px)!important;right:auto!important;
+  top:var(--orbit-player-top,100px)!important;bottom:auto!important;
+  width:50vw!important;max-width:50vw!important;box-sizing:border-box!important;
+ }
+}
+
+@media(min-width:851px){.player-bar.is-floating{width:var(--orbit-player-panel-width,50vw)!important;max-width:var(--orbit-player-panel-width,50vw)!important;box-sizing:border-box!important}}
+
+/* ORBIT player edge clearance: measure against the usable viewport, not 100vw (which includes the scrollbar). */
+.player-bar.is-floating{box-sizing:border-box!important;left:var(--orbit-player-panel-left,8px)!important;right:auto!important;width:var(--orbit-player-panel-width,min(340px,calc(100vw - 48px)))!important;max-width:var(--orbit-player-panel-width,min(340px,calc(100vw - 48px)))!important;}
+@media(min-width:851px){.player-bar.is-floating{top:var(--orbit-player-top,100px)!important;bottom:auto!important}}
+@media(max-width:850px){body.mobile-player-open .player-bar.is-floating{top:var(--orbit-player-panel-top,8px)!important;bottom:auto!important;width:var(--orbit-player-panel-width,min(340px,calc(100vw - 48px)))!important;max-width:var(--orbit-player-panel-width,min(340px,calc(100vw - 48px)))!important;}}
+html,body{overflow-x:hidden!important;}

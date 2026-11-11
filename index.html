@@ -3,15 +3,15 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="theme-color" content="#0b1117"><link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/icons/apple-touch-icon.png"><meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#F5F7FB"><link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/icons/apple-touch-icon.png"><meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="description" content="A world of sound. Discover live radio, podcasts, audiobooks and music from everywhere.">
   <title>ORBIT, sound without borders</title>
-  <script>(()=>{try{const saved=localStorage.getItem("orbit-theme");const desktop=!!window.orbitDesktop?.isDesktop;const light=saved==="light"||(saved!=="dark"&&!desktop&&window.matchMedia("(prefers-color-scheme: light)").matches);document.documentElement.dataset.theme=light?"light":"dark";document.documentElement.classList.toggle("orbit-desktop-app",!!window.orbitDesktop?.isDesktop);}catch{document.documentElement.dataset.theme="dark";}})();</script>
+  <script>(()=>{try{const saved=localStorage.getItem("orbit-theme");const desktop=!!window.orbitDesktop?.isDesktop;const light=saved==="light"||(saved!=="dark"&&!desktop);document.documentElement.dataset.theme=light?"light":"dark";document.documentElement.classList.toggle("orbit-desktop-app",!!window.orbitDesktop?.isDesktop);}catch{document.documentElement.dataset.theme="dark";}})();</script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="./styles.css"><link rel="stylesheet" href="./orbit-feature-additions.css"><link rel="stylesheet" href="./orbit-ui-fixes-20261109.css"><link rel="stylesheet" href="./orbit-mobile.css">
-  <link rel="stylesheet" href="./orbit-mobile-polish.css?v=screen-detail-fullscreen2"><link rel="stylesheet" href="./orbit-mobile-landing.css"><link rel="stylesheet" href="./orbit-desktop-refresh.css"></head>
+  <link rel="stylesheet" href="./orbit-mobile-polish.css?v=screen-detail-fullscreen2"><link rel="stylesheet" href="./orbit-mobile-landing.css"><link rel="stylesheet" href="./orbit-desktop-refresh.css"><link rel="stylesheet" href="./orbit-web-refresh.css"></head>
 <body>
   <div class="app-shell">
     <aside class="sidebar">
@@ -152,8 +152,15 @@
 </section>
 
       <section class="view" id="view-omnisave">
-
-
+  <div class="omnisave-toolbar">
+    <div class="omnisave-status" id="omnisave-status" data-state="info" role="status">Connecting to OmniSave…</div>
+    <div class="omnisave-actions">
+      <button type="button" id="omnisave-back">Back</button>
+      <button type="button" id="omnisave-forward">Forward</button>
+      <button type="button" id="omnisave-reload">Reload</button>
+      <button type="button" id="omnisave-open-external">Open website</button>
+    </div>
+  </div>
   <div class="omnisave-frame-wrap">
     <webview id="omnisave-webview" src="about:blank" partition="persist:orbit-omnisave" webpreferences="contextIsolation=yes,nodeIntegration=no,sandbox=yes" title="ORBIT video search"></webview>
     <iframe id="omnisave-browser-frame" title="OmniSave video downloader" loading="eager" referrerpolicy="strict-origin-when-cross-origin" allow="clipboard-read; clipboard-write" src="about:blank"></iframe>
@@ -161,8 +168,8 @@
   </div>
   <script>
     (() => {
-      const isDesktopBrowser = !window.orbitDesktop?.isDesktop && window.matchMedia('(min-width: 801px)').matches;
-      if (!isDesktopBrowser) return;
+      const isWebBrowser = !window.orbitDesktop?.isDesktop;
+      if (!isWebBrowser) return;
       document.documentElement.classList.add('orbit-web-omnisave');
       const frame = document.getElementById('omnisave-browser-frame');
       if (frame) frame.src = 'https://videodownloader.site/';

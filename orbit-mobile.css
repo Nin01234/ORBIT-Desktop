@@ -207,3 +207,16 @@
 }
 
 @media(max-width:760px){body.mobile-player-open .player-bar{bottom:auto!important}body.mobile-player-open .player-bar[style*="top"]{position:fixed!important}.player-reveal{touch-action:none!important;user-select:none;-webkit-user-select:none;cursor:grab!important}}
+
+/* Player launcher and expanded player move together horizontally and vertically. */
+@media(max-width:850px){
+ body.mobile-player-open .player-bar{
+   left:var(--orbit-player-panel-left,8px)!important;right:auto!important;
+   width:min(340px,calc(100vw - 16px))!important;max-width:calc(100vw - 16px)!important;
+ }
+ .player-reveal{
+   left:var(--orbit-player-reveal-left,12px)!important;right:auto!important;
+   touch-action:none!important;user-select:none;-webkit-user-select:none;cursor:grab!important;
+ }
+ body.mobile-player-open .player-bar[style*="top"]{position:fixed!important}
+}

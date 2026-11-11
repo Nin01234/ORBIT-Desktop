@@ -805,7 +805,7 @@ function createLocalServer(root) {
     if (pathname === "/") pathname = "/index.html";
     const target = path.resolve(root, "." + pathname);
     const relativePath = path.relative(root, target).replace(/\\/g, "/");
-    const allowedAsset = ["index.html","styles.css","orbit-feature-additions.css","orbit-ui-fixes-20261109.css","orbit-mobile.css","orbit-mobile-polish.css","orbit-mobile-landing.css","orbit-mobile-hero.svg","orbit-mobile-radio.svg","orbit-mobile-music.svg","orbit-mobile-movies.svg","orbit-mobile-offline.svg","orbit-mobile-podcasts.svg","mobile-bridge.js","app.js","manifest.webmanifest","sw.js","live-podcast.js"].includes(relativePath) || /^icons\/[A-Za-z0-9._-]+\.png$/i.test(relativePath);
+    const allowedAsset = ["index.html","styles.css","orbit-feature-additions.css","orbit-ui-fixes-20261109.css","orbit-mobile.css","orbit-mobile-polish.css","orbit-mobile-landing.css","orbit-desktop-refresh.css","orbit-web-refresh.css","orbit-mobile-hero.svg","orbit-mobile-radio.svg","orbit-mobile-music.svg","orbit-mobile-movies.svg","orbit-mobile-offline.svg","orbit-mobile-podcasts.svg","mobile-bridge.js","app.js","manifest.webmanifest","sw.js","live-podcast.js"].includes(relativePath) || /^icons\/[A-Za-z0-9._-]+\.png$/i.test(relativePath);
     if (!target.startsWith(root + path.sep) || !allowedAsset) {
       res.writeHead(404).end("Not found"); return;
     }
@@ -1005,6 +1005,8 @@ async function createWindow(port) {
     }
   });
   await mainWindow.loadURL(localOrigin + "/");
+  // Apply desktop-only styling from the main process as a reliable fallback to the preload flag.
+  await mainWindow.webContents.executeJavaScript('document.documentElement.classList.add("orbit-desktop-app"); if (!localStorage.getItem("orbit-theme")) document.documentElement.dataset.theme = "dark"; true;');
   mainWindow.on("closed", () => { mainWindow = null; });
 }
 

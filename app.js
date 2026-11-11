@@ -567,7 +567,7 @@ async function openTmdbMovie(id){
     if(token!==tmdbMovieOpenToken)return;
     const trailers=(Array.isArray(trailerData.trailers)?trailerData.trailers:[]).filter(v=>/^[&times;Za-z0-9_-]{11}$/.test(v.youtubeId||"")).slice(0,6);
     const trailerHtml='<section class="orbit-trailer-section"><h3 class="section-title">Watch the trailer</h3><p class="section-description">Preview this film here in ORBIT. Choose another trailer below if you prefer.</p>'+
-      (trailers.length?'<div id="movie-trailer-player" class="orbit-trailer-player" aria-live="polite"><iframe src="https://www.youtube-nocookie.com/embed/'+encodeURIComponent(trailers[0].youtubeId)+'?autoplay=1&playsinline=1&rel=0&modestbranding=1" title="'+esc(trailers[0].title||movie.title+" trailer")+'" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" sandbox="allow-scripts allow-same-origin allow-presentation" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen" allowfullscreen></iframe>'+
+      (trailers.length?'<div id="movie-trailer-player" class="orbit-trailer-player" aria-live="polite"><iframe src="https://www.youtube-nocookie.com/embed/'+encodeURIComponent(trailers[0].youtubeId)+'?autoplay=1&playsinline=1&rel=0&modestbranding=1&origin='+encodeURIComponent(location.origin)+'" title="'+esc(trailers[0].title||movie.title+" trailer")+'" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="origin" allow="autoplay; accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen" allowfullscreen></iframe>'+
         '<button type="button" class="trailer-picker-toggle" data-trailer-toggle aria-expanded="false">Choose trailer <span>&#9662;</span></button>'+
         '<div class="orbit-trailer-picker" hidden><div class="orbit-trailer-picker-head"><strong>Select a trailer</strong><button type="button" data-trailer-toggle-close aria-label="Close trailer list">&times;</button></div>'+
         '<div class="orbit-trailer-grid">'+trailers.map((v,i)=>'<article class="orbit-trailer-card">'+
@@ -677,7 +677,7 @@ function playYouTubeVideo(id,title,artist){
     panel.style.height="auto";
     panel.style.maxHeight="none";
     const embedUrl="https://www.youtube-nocookie.com/embed/"+encodeURIComponent(id)+"?autoplay=1&rel=0&playsinline=1&enablejsapi=1&origin="+encodeURIComponent(location.origin);
-    panel.innerHTML='<div class="orbit-youtube-frame" style="width:100%;aspect-ratio:16/9;position:relative;background:#000;overflow:hidden;"><iframe class="youtube-embed" src="'+embedUrl+'" title="'+esc(title)+'" referrerpolicy="strict-origin-when-cross-origin" allow="autoplay; encrypted-media; picture-in-picture; web-share; fullscreen" allowfullscreen></iframe></div>'+
+    panel.innerHTML='<div class="orbit-youtube-frame" style="width:100%;aspect-ratio:16/9;position:relative;background:#000;overflow:hidden;"><iframe class="youtube-embed" src="'+embedUrl+'" title="'+esc(title)+'" referrerpolicy="origin" allow="autoplay; encrypted-media; picture-in-picture; web-share; fullscreen" allowfullscreen></iframe></div>'+
       '<div class="youtube-player-subbar" style="display:flex;align-items:center;gap:12px;padding:10px 14px;background:rgba(13,21,30,0.92);border-radius:0 0 8px 8px;font-size:13px;border:1px solid rgba(255,255,255,0.06);border-top:none;"><span>Playing: <b>'+esc(title)+'</b> &bull; '+esc(artist)+'</span></div>';
   }
   setPlayer(title,artist,"Playing music video");
@@ -810,7 +810,7 @@ function applyOrbitTheme(theme){
 function setupSettings(){
   const theme=$("#setting-theme"),motion=$("#setting-motion"),volume=$("#setting-volume"),volumeValue=$("#setting-volume-value"),remember=$("#setting-remember-volume"),nav=$("#setting-nav-visible");
   if(!theme)return;
-  theme.value=localStorage.getItem("orbit-theme")||"dark";
+  theme.value=localStorage.getItem("orbit-theme")||(document.documentElement.classList.contains("orbit-desktop-app")?"dark":"light");
   motion.checked=localStorage.getItem("orbit-reduce-motion")==="1";
   remember.checked=localStorage.getItem("orbit-remember-volume")!=="0";
   nav.checked=localStorage.getItem("orbit-nav-hidden")!=="1";
@@ -822,7 +822,7 @@ function setupSettings(){
   volume.addEventListener("input",()=>{orbitBaseVolume=Number(volume.value)/100;applyOrbitSound(orbitSoundMode);volumeValue.textContent=volume.value+"%";if(remember.checked)localStorage.setItem("orbit-volume",volume.value);});
   remember.addEventListener("change",()=>{localStorage.setItem("orbit-remember-volume",remember.checked?"1":"0");if(!remember.checked)localStorage.removeItem("orbit-volume");});
   nav.addEventListener("change",()=>{document.body.classList.toggle("nav-hidden",!nav.checked);localStorage.setItem("orbit-nav-hidden",nav.checked?"0":"1");$("#nav-toggle").title=nav.checked?"Hide navigation":"Show navigation";});
-  $("#settings-reset").addEventListener("click",()=>{["orbit-theme","orbit-reduce-motion","orbit-volume","orbit-remember-volume","orbit-nav-hidden","orbit-sound","orbit-audiobooks","orbit-global-live"].forEach(k=>localStorage.removeItem(k));theme.value="dark";motion.checked=false;remember.checked=true;nav.checked=true;volume.value="80";volumeValue.textContent="80%";orbitBaseVolume=.8;audio.volume=.8;const soundSelect=$("#setting-sound");if(soundSelect)soundSelect.value="normal";orbitSoundMode="normal";document.documentElement.classList.remove("reduce-motion");applyOrbitSound("normal");applyOrbitTheme("dark");document.body.classList.remove("nav-hidden");$("#nav-toggle").title="Hide navigation";notify("Settings restored to defaults.");});
+  $("#settings-reset").addEventListener("click",()=>{["orbit-theme","orbit-reduce-motion","orbit-volume","orbit-remember-volume","orbit-nav-hidden","orbit-sound","orbit-audiobooks","orbit-global-live"].forEach(k=>localStorage.removeItem(k));theme.value=document.documentElement.classList.contains("orbit-desktop-app")?"dark":"light";motion.checked=false;remember.checked=true;nav.checked=true;volume.value="80";volumeValue.textContent="80%";orbitBaseVolume=.8;audio.volume=.8;const soundSelect=$("#setting-sound");if(soundSelect)soundSelect.value="normal";orbitSoundMode="normal";document.documentElement.classList.remove("reduce-motion");applyOrbitSound("normal");applyOrbitTheme(theme.value);document.body.classList.remove("nav-hidden");$("#nav-toggle").title="Hide navigation";notify("Settings restored to defaults.");});
 }
 
 
@@ -1018,17 +1018,22 @@ function setupEvents(){
   document.addEventListener("click",e=>{if(discoverGroup&&!discoverGroup.contains(e.target)){discoverGroup.classList.remove("is-open");discoverToggle?.setAttribute("aria-expanded","false");}});
   window.orbitDesktop?.onOfflineUpdated?.(data=>{loadOfflineLibrary();});
   window.orbitDesktop?.onOmniDownload?.(data=>{const status=$("#omnisave-status");if(status){status.textContent=data?.message||"OmniSave download update.";status.dataset.state=data?.state||"info";}if(data?.state==="completed")notify("Saved to ORBIT Downloads: "+(data?.title||"video"));else if(data?.state==="error")notify(data.message||"Download failed.");});
-  const omni=$("#omnisave-webview"),omniStatus=$("#omnisave-status");
+  const omni=$("#omnisave-webview"),omniFrame=$("#omnisave-browser-frame"),omniStatus=$("#omnisave-status");
   if(omni){
-    omni.addEventListener("did-start-loading",()=>{if(omniStatus)omniStatus.textContent="Connecting to videodownloader.site?";});
+    omni.addEventListener("did-start-loading",()=>{if(omniStatus)omniStatus.textContent="Connecting to OmniSave…";});
     omni.addEventListener("dom-ready",()=>{if(omniStatus)omniStatus.textContent="OmniSave loaded inside ORBIT. Use the website search and controls.";});
     omni.addEventListener("did-fail-load",e=>{if(e.errorCode!==-3&&omniStatus)omniStatus.textContent="The site could not be embedded or reached. Try Reload or Open website.";});
     omni.addEventListener("did-navigate",e=>{if(omniStatus){try{omniStatus.textContent="Connected: "+new URL(e.url).hostname;}catch{}}});
     const applyOmniCleanView=()=>{try{omni.executeJavaScript("(()=>{const main=document.querySelector('main')||document.body;const apply=()=>{document.querySelector('header')?.remove();document.querySelector('footer')?.remove();document.querySelectorAll('[id^=div-gpt-ad],[data-ad]').forEach(e=>e.remove());for(const e of [...main.querySelectorAll('*')]){if(e.children.length===0&&/omnisave/i.test(e.textContent||'')&&!e.closest('form')){const p=e.closest('a,button,[role=button],section,nav')||e;p.style.setProperty('display','none','important');}}document.body.style.margin='0';document.body.style.background='#0b1117';main.style.maxWidth='1100px';main.style.margin='0 auto';main.style.padding='20px 24px 36px';};apply();if(!window.__orbitCleanViewObserver){window.__orbitCleanViewObserver=new MutationObserver(()=>{clearTimeout(window.__orbitCleanViewTimer);window.__orbitCleanViewTimer=setTimeout(apply,120);});window.__orbitCleanViewObserver.observe(main,{childList:true,subtree:true});}let n=0;const retry=setInterval(()=>{apply();if(++n>=20)clearInterval(retry);},500);})()");}catch(e){}};
     omni.addEventListener("dom-ready",applyOmniCleanView);omni.addEventListener("did-finish-load",applyOmniCleanView);
   }
+  if(omniFrame){
+    omniFrame.addEventListener("load",()=>{if(!window.orbitDesktop?.isDesktop&&omniStatus)omniStatus.textContent="OmniSave page loaded. Use the website search and controls.";});
+    omniFrame.addEventListener("error",()=>{if(omniStatus)omniStatus.textContent="OmniSave could not load. Use Open website to continue.";});
+  }
+  $("#omnisave-back")?.addEventListener("click",()=>{if(omni?.canGoBack())omni.goBack();});
   $("#omnisave-forward")?.addEventListener("click",()=>{if(omni?.canGoForward())omni.goForward();});
-  $("#omnisave-reload")?.addEventListener("click",()=>omni?.reload());
+  $("#omnisave-reload")?.addEventListener("click",()=>{if(omni)omni.reload();else if(omniFrame)omniFrame.src=omniFrame.src;});
   $("#omnisave-open-external")?.addEventListener("click",()=>window.open("https://videodownloader.site/","_blank"));
   $$("[data-go]").forEach(b=>b.addEventListener("click",()=>showView(b.dataset.go)));
   document.addEventListener("click",e=>{
@@ -1038,7 +1043,7 @@ function setupEvents(){
     const audioFav=e.target.closest("[data-audio-fav]");if(audioFav){toggleMusicFav(musicTrackCache.get(String(audioFav.dataset.audioFav))||musicFavs().find(x=>String(x.id)===String(audioFav.dataset.audioFav)));return;}
     const film=e.target.closest("[data-film-play]");if(film){playArchiveFilm(film.dataset.filmPlay,film.dataset.title);return;}
     const trailerToggle=e.target.closest("[data-trailer-toggle],[data-trailer-toggle-close]");if(trailerToggle){const host=$("#movie-trailer-player"),picker=host?.querySelector(".orbit-trailer-picker");const open=picker?.hidden!==false;if(picker){picker.hidden=!open;const btn=host.querySelector("[data-trailer-toggle]");if(btn){btn.setAttribute("aria-expanded",String(open));btn.innerHTML=open?'Hide trailers <span>⌃</span>':'Choose trailer <span>&#9662;</span>';}}return;}
-    const trailer=e.target.closest("[data-trailer-play]");if(trailer){const host=$("#movie-trailer-player");if(host){const picker=host.querySelector(".orbit-trailer-picker");if(picker)picker.hidden=true;const toggle=host.querySelector("[data-trailer-toggle]");if(toggle){toggle.setAttribute("aria-expanded","false");toggle.innerHTML='Choose trailer <span>&#9662;</span>';}const frame=host.querySelector("iframe");if(frame)frame.src="https://www.youtube-nocookie.com/embed/"+encodeURIComponent(trailer.dataset.trailerPlay)+"?autoplay=1&rel=0&modestbranding=1";host.scrollIntoView({behavior:"smooth",block:"nearest"});$("#film-result-note").textContent="Playing trailer inside ORBIT";}return;}
+    const trailer=e.target.closest("[data-trailer-play]");if(trailer){const host=$("#movie-trailer-player");if(host){const picker=host.querySelector(".orbit-trailer-picker");if(picker)picker.hidden=true;const toggle=host.querySelector("[data-trailer-toggle]");if(toggle){toggle.setAttribute("aria-expanded","false");toggle.innerHTML='Choose trailer <span>&#9662;</span>';}const frame=host.querySelector("iframe");if(frame)frame.src="https://www.youtube-nocookie.com/embed/"+encodeURIComponent(trailer.dataset.trailerPlay)+"?autoplay=1&rel=0&modestbranding=1&origin="+encodeURIComponent(location.origin);host.scrollIntoView({behavior:"smooth",block:"nearest"});$("#film-result-note").textContent="Playing trailer inside ORBIT";}return;}
     const browseFree=e.target.closest("[data-browse-free-movies]");if(browseFree){loadPublicDomainFilms("popular").then(()=>{$("#movie-results").scrollIntoView({behavior:"smooth",block:"start"});}).catch(()=>notify("Free movie catalogue is temporarily unavailable."));return;}
     const filmDetailBack=e.target.closest("[data-film-detail-back]");if(filmDetailBack){closeMobileMovieDetail();return;}
     const tmdbOpen=e.target.closest("[data-tmdb-open]");if(tmdbOpen){openTmdbMovie(tmdbOpen.dataset.tmdbOpen);return;}
@@ -1092,38 +1097,42 @@ function setupEvents(){
   if(localStorage.getItem("orbit-nav-hidden")==="1")document.body.classList.add("nav-hidden");
   if(localStorage.getItem("orbit-player-hidden")==="1")document.body.classList.add("player-hidden");
   navToggle.addEventListener("click",()=>{const hidden=document.body.classList.toggle("nav-hidden");localStorage.setItem("orbit-nav-hidden",hidden?"1":"0");navToggle.title=hidden?"Show navigation":"Hide navigation";navToggle.setAttribute("aria-label",navToggle.title);const setting=$("#setting-nav-visible");if(setting)setting.checked=!hidden;});
-  playerHide.addEventListener("click",()=>{document.body.classList.add("player-hidden");document.body.classList.remove("mobile-player-open");localStorage.setItem("orbit-player-hidden","1");});
+  playerHide.addEventListener("click",()=>{document.body.classList.add("player-hidden");document.body.classList.remove("mobile-player-open");document.querySelector(".player-bar")?.classList.remove("is-floating");localStorage.setItem("orbit-player-hidden","1");});
   const fullPlayer=document.querySelector(".player-bar");
   let revealDrag=null,suppressRevealClick=false;
   const isDesktopPlayer=()=>!!window.orbitDesktop?.isDesktop&&innerWidth>850;
   const applyGroupPosition=(launcherTop,launcherLeft)=>{
-    const safeLauncher=Math.max(8,Math.min(innerHeight-playerReveal.offsetHeight-8,launcherTop));
+    const viewportWidth=document.documentElement.clientWidth||innerWidth;
+    const viewportHeight=document.documentElement.clientHeight||innerHeight;
+    const safeLauncher=Math.max(8,Math.min(viewportHeight-playerReveal.offsetHeight-8,launcherTop));
     playerReveal.style.top=safeLauncher+"px";playerReveal.style.bottom="auto";
-    if(isDesktopPlayer()){
-      const panelWidth=Math.min(innerWidth*.5,innerWidth-32);
-      const requestedLeft=Number.isFinite(launcherLeft)?launcherLeft:16;
-      const launcherWidth=playerReveal.offsetWidth||52;
-      const safeRevealLeft=Math.max(8,Math.min(innerWidth-launcherWidth-8,requestedLeft));
-      const panelRequestedLeft=safeRevealLeft>innerWidth/2?safeRevealLeft+launcherWidth-panelWidth:safeRevealLeft;
-      const safePanelLeft=Math.max(8,Math.min(innerWidth-panelWidth-8,panelRequestedLeft));
-      document.body.style.setProperty("--orbit-player-reveal-left",safeRevealLeft+"px");
-      document.body.style.setProperty("--orbit-player-panel-left",safePanelLeft+"px");
-      const panelTop=Math.max(8,Math.min(innerHeight-(fullPlayer?.offsetHeight||120)-8,safeLauncher+playerReveal.offsetHeight+10));
-      document.body.style.setProperty("--orbit-player-top",panelTop+"px");
-      playerReveal.style.left=safeRevealLeft+"px";playerReveal.style.right="auto";
-      return;
-    }
+    const panelWidth=viewportWidth>850?Math.min(viewportWidth*.5,viewportWidth-48):Math.min(340,viewportWidth-48);
+    const requestedLeft=Number.isFinite(launcherLeft)?launcherLeft:16;
+    const launcherWidth=playerReveal.offsetWidth||52;
+    const safeRevealLeft=Math.max(8,Math.min(viewportWidth-launcherWidth-8,requestedLeft));
+    /* On the right half, pin the panel's RIGHT edge safely inside the page so it opens left of the launcher. */
+    const panelRequestedLeft=safeRevealLeft>viewportWidth/2?viewportWidth-panelWidth-36:safeRevealLeft+launcherWidth+12;
+    const safePanelLeft=Math.max(8,Math.min(viewportWidth-panelWidth-8,panelRequestedLeft));
+    document.body.style.setProperty("--orbit-player-reveal-left",safeRevealLeft+"px");
+    document.body.style.setProperty("--orbit-player-panel-left",safePanelLeft+"px");
+    document.body.style.setProperty("--orbit-player-panel-width",panelWidth+"px");
+    playerReveal.style.left=safeRevealLeft+"px";playerReveal.style.right="auto";
     if(fullPlayer&&document.body.classList.contains("mobile-player-open")){
+      fullPlayer.style.left=safePanelLeft+"px";fullPlayer.style.right="auto";fullPlayer.style.width=panelWidth+"px";
       fullPlayer.style.bottom="auto";
-      const panelTop=Math.max(8,Math.min(innerHeight-fullPlayer.offsetHeight-8,safeLauncher+playerReveal.offsetHeight+12));
-      fullPlayer.style.top=panelTop+"px";
+      const panelTop=Math.max(8,Math.min(viewportHeight-fullPlayer.offsetHeight-8,safeLauncher+playerReveal.offsetHeight+12));
+      fullPlayer.style.top=panelTop+"px";document.body.style.setProperty("--orbit-player-panel-top",panelTop+"px");
+    }
+    if(isDesktopPlayer()){
+      const panelTop=Math.max(8,Math.min(viewportHeight-(fullPlayer?.offsetHeight||120)-8,safeLauncher+playerReveal.offsetHeight+10));
+      document.body.style.setProperty("--orbit-player-top",panelTop+"px");document.body.style.setProperty("--orbit-player-panel-top",panelTop+"px");
     }
   };
   const savedRevealY=Number(localStorage.getItem("orbit-player-reveal-y"));
   const savedRevealX=Number(localStorage.getItem("orbit-player-reveal-x"));
   if(Number.isFinite(savedRevealY)&&savedRevealY>0)applyGroupPosition(savedRevealY,savedRevealX);
   playerReveal.addEventListener("click",()=>{
-    document.body.classList.remove("player-hidden");document.body.classList.add("mobile-player-open");
+    document.body.classList.remove("player-hidden");document.body.classList.add("mobile-player-open");fullPlayer?.classList.add("is-floating");
     localStorage.setItem("orbit-player-hidden","0");
     const y=Number(localStorage.getItem("orbit-player-reveal-y"));
     const x=Number(localStorage.getItem("orbit-player-reveal-x"));
@@ -1138,12 +1147,12 @@ function setupEvents(){
   playerReveal.addEventListener("pointermove",e=>{
     if(!revealDrag||e.pointerId!==revealDrag.pointerId)return;
     const delta=e.clientY-revealDrag.startY,deltaX=e.clientX-revealDrag.startX;
-    if(Math.abs(delta)>4||(isDesktopPlayer()&&Math.abs(deltaX)>4))revealDrag.moved=true;
-    if(revealDrag.moved)applyGroupPosition(revealDrag.originY+delta,isDesktopPlayer()?revealDrag.originX+deltaX:undefined);
+    if(Math.abs(delta)>4||Math.abs(deltaX)>4)revealDrag.moved=true;
+    if(revealDrag.moved)applyGroupPosition(revealDrag.originY+delta,revealDrag.originX+deltaX);
   });
   const finishRevealDrag=e=>{
     if(!revealDrag||e.pointerId!==revealDrag.pointerId)return;
-    if(revealDrag.moved){const rect=playerReveal.getBoundingClientRect();localStorage.setItem("orbit-player-reveal-y",String(Math.round(rect.top)));if(isDesktopPlayer())localStorage.setItem("orbit-player-reveal-x",String(Math.round(rect.left)));suppressRevealClick=true;setTimeout(()=>{suppressRevealClick=false;},250);}
+    if(revealDrag.moved){const rect=playerReveal.getBoundingClientRect();localStorage.setItem("orbit-player-reveal-y",String(Math.round(rect.top)));localStorage.setItem("orbit-player-reveal-x",String(Math.round(rect.left)));suppressRevealClick=true;setTimeout(()=>{suppressRevealClick=false;},250);}
     revealDrag=null;
   };  playerReveal.addEventListener("pointerup",finishRevealDrag);
   playerReveal.addEventListener("pointercancel",finishRevealDrag);
