@@ -1,4 +1,19 @@
-const { app, BrowserWindow, shell, dialog, ipcMain, session } = require("electron");
+const { app, BrowserWindow, shell, dialog, ipcMain, session, screen } = require("electron");
+ipcMain.handle("orbit:video-capabilities", async () => {
+  let gpuInfo = {};
+  try { gpuInfo = await app.getGPUInfo("complete"); } catch {}
+  const d = screen.getPrimaryDisplay();
+  const devices = Array.isArray(gpuInfo.gpuDevice) ? gpuInfo.gpuDevice.map(x => ({
+    vendorString: x.vendorString || "", deviceString: x.deviceString || "",
+    vendorId: x.vendorId ?? null, deviceId: x.deviceId ?? null,
+    driverVersion: x.driverVersion || ""
+  })) : [];
+  const status = app.getGPUFeatureStatus?.() || {};
+  return {
+    display: { width: Math.round(d.size.width * d.scaleFactor), height: Math.round(d.size.height * d.scaleFactor), scaleFactor: d.scaleFactor },
+    gpu: { devices, hardwareAcceleration: status.gpu_compositing !== "disabled" && status.gpu_compositing !== "unavailable", featureStatus: status }
+  };
+});
 const http = require("node:http");
 const { Readable, Transform } = require("node:stream");
 const { pipeline } = require("node:stream/promises");

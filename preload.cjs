@@ -2,6 +2,7 @@
 const { contextBridge, ipcRenderer } = require("electron");
 contextBridge.exposeInMainWorld("orbitDesktop", Object.freeze({
   isDesktop: true,
+  getVideoCapabilities: () => ipcRenderer.invoke("orbit:video-capabilities"),
   toggleFullscreen: () => ipcRenderer.invoke("orbit:fullscreen-toggle"),
   onFullscreenChange: callback => { if (typeof callback === "function") ipcRenderer.on("orbit:fullscreen-changed", (_event, active) => callback(!!active)); },
   openSpotify: () => ipcRenderer.invoke("orbit:spotify-open"),
