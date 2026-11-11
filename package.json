@@ -1,6 +1,6 @@
 {
   "name": "orbit-radio",
-  "version": "1.1.25",
+  "version": "1.1.26",
   "description": "ORBIT, radio, music, podcasts, audiobooks and films",
   "main": "main.cjs",
   "author": "Nino Brown",
@@ -21,7 +21,7 @@
     "appId": "com.orbit.radio",
     "productName": "ORBIT",
     "directories": {
-      "output": "release-build"
+      "output": "dist"
     },
     "win": {
       "target": [
@@ -59,4 +59,4 @@
       "!**/node_modules/.cache/**"
     ]
   }
-}
+}\n
