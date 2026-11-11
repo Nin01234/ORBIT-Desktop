@@ -13,3 +13,5 @@ Thumbs.db
 *.cer
 *.crt
 *.blockmap
+
+release-build/

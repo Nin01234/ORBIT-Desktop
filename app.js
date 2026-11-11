@@ -32,7 +32,7 @@ async function radioSearch(params={}){
 }
 async function loadFeatured(){
   const host=$("#featured-stations");if(!host)return;
-  host.innerHTML='<div class="loading-card">Finding live stations around the world...</div>';
+  host.innerHTML='<div class="loading-card">Finding live stations around the world…</div>';
   try{
     const q=new URLSearchParams({limit:"8",hidebroken:"true",order:"clickcount",reverse:"true"});
     const response=await fetch(SPINN_RADIO_API+"?"+q.toString(),{cache:"no-store",signal:AbortSignal.timeout(12000)});
@@ -54,6 +54,7 @@ async function loadStationList(){
 }
 function renderStationResults(){ $("#station-results").innerHTML=stations.length?stations.slice(0,60).map(stationRow).join(""):'<div class="empty-state">No matching stations. Try another country or search.</div>'; }
 function radioProxyUrl(url,station){
+  if(!window.orbitDesktop?.isDesktop)return url;
   const params=new URLSearchParams({url});
   try{const ref=new URL(station?.homepage||"");if(ref.protocol==="http:"||ref.protocol==="https:")params.set("ref",ref.toString());}catch{}
   return "/api/radio-proxy?"+params.toString();
@@ -83,7 +84,7 @@ async function attemptRadioPlayback(token,index){
     state.retrying=true;
     state.reconnectCount=(state.reconnectCount||0)+1;
     const wait=Math.min(30000,2000*Math.pow(2,Math.min(state.reconnectCount-1,4)));
-    $("#player-state").textContent="Station temporarily unavailable - retrying in "+Math.round(wait/1000)+"s...";
+    $("#player-state").textContent="Station temporarily unavailable — retrying in "+Math.round(wait/1000)+"s…";
     clearTimeout(state.reconnectTimer);
     state.reconnectTimer=setTimeout(()=>{
       if(token!==radioPlayToken||radioPlayback!==state||!currentStation)return;
@@ -96,7 +97,7 @@ async function attemptRadioPlayback(token,index){
   const plan=state.plans[index];
   if(radioHls){radioHls.destroy();radioHls=null;}
   audio.pause();audio.removeAttribute("src");audio.load();
-  $("#player-state").textContent="Connecting to "+stationName(state.station)+"...";
+  $("#player-state").textContent="Connecting to "+stationName(state.station)+"…";
   try{
     if(plan.transport==="hls"){
       await ensureRadioHls();
@@ -152,7 +153,7 @@ function retryRadioPlayback(token,reason="The stream stopped"){
   clearTimeout(state.reconnectTimer);
   state.retrying=true;
   state.active=true;
-  $("#player-state").textContent=reason+" - reconnecting...";
+  $("#player-state").textContent=reason+" — reconnecting…";
   attemptRadioPlayback(token,state.index+1);
 }
 function playStation(id){
@@ -202,17 +203,17 @@ function filterDiscoverUpdates(){
   let empty=host.querySelector(".discover-filter-empty");if(!visible){if(!empty){empty=document.createElement("div");empty.className="empty-state discover-filter-empty";empty.textContent="No updates match this filter. Try another category or search.";host.appendChild(empty);}empty.hidden=false;}else if(empty)empty.hidden=true;
 }
 async function refreshDiscoverUpdates(){
-  const status=$("#discover-updates-status");if(status)status.textContent="Refreshing catalogues...";
+  const status=$("#discover-updates-status");if(status)status.textContent="Refreshing catalogues…";
   const tasks=[loadFeatured(),loadAudioMusic("trending"),loadYouTubeMusic("trending music"),loadItunes("podcasts","top podcasts"),loadBooks(),loadArchiveFilms("trending")];
   await Promise.all(tasks.map(task=>Promise.resolve(task).then(()=>renderDiscoverUpdates()).catch(()=>{})));
   renderDiscoverUpdates();
 }
 async function searchDiscoverUpdates(term){
   const query=String(term||"").trim();if(!query){return refreshDiscoverUpdates();}
-  const status=$("#discover-updates-status");if(status)status.textContent="Searching connected catalogues...";
+  const status=$("#discover-updates-status");if(status)status.textContent="Searching connected catalogues…";
   const tasks=[loadAudioMusic(query),loadYouTubeMusic(query),loadItunes("podcasts",query),loadBooks(query),loadArchiveFilms(query)];
   await Promise.all(tasks.map(task=>Promise.resolve(task).then(()=>renderDiscoverUpdates()).catch(()=>{})));
-  renderDiscoverUpdates();if(status)status.textContent='Search results for "'+query+'"';
+  renderDiscoverUpdates();if(status)status.textContent="Search results for “"+query+"”";
 }
 function setupDiscoverUpdates(){
   const host=$("#discover-updates-grid");if(!host||host.dataset.ready)return;host.dataset.ready="1";
@@ -223,7 +224,32 @@ function setupDiscoverUpdates(){
   document.addEventListener("visibilitychange",()=>{if(!document.hidden&&Date.now()-(window.orbitDiscoverLastRefresh||0)>600000){window.orbitDiscoverLastRefresh=Date.now();refreshDiscoverUpdates();}});
 }
 
-function setPlayer(title,subtitle,state){$("#player-title").textContent=title;$("#player-subtitle").textContent=subtitle;$("#player-state").textContent=state;$("#play-button").classList.add("is-playing");}
+function setupOrbitMediaSession(){
+  if(!("mediaSession" in navigator))return;
+  const session=navigator.mediaSession;
+  const update=()=>{try{
+    const title=$("#player-title")?.textContent?.trim()||"ORBIT",subtitle=$("#player-subtitle")?.textContent?.trim()||"Media player";
+    const track=currentMusicTrack,artwork=track?.artwork||"";
+    if("MediaMetadata" in window)session.metadata=new MediaMetadata({title:track?.title||title,artist:track?.artist||currentStation?.name||subtitle,album:track?.source||"ORBIT",artwork:artwork?[{src:artwork,sizes:"512x512",type:"image/jpeg"}]:[]});
+  }catch{}};
+  try{
+    session.setActionHandler("play",()=>{if(audio.src)audio.play().catch(()=>{});});
+    session.setActionHandler("pause",()=>audio.pause());
+    session.setActionHandler("stop",()=>{audio.pause();audio.currentTime=0;});
+    session.setActionHandler("previoustrack",()=>stepMusic(-1));
+    session.setActionHandler("nexttrack",()=>stepMusic(1));
+    session.setActionHandler("seekbackward",d=>{if(Number.isFinite(audio.duration))audio.currentTime=Math.max(0,audio.currentTime-(d.seekOffset||10));});
+    session.setActionHandler("seekforward",d=>{if(Number.isFinite(audio.duration))audio.currentTime=Math.min(audio.duration,audio.currentTime+(d.seekOffset||10));});
+  }catch{}
+  window.orbitUpdateMediaSession=update;update();
+}
+function syncOrbitMediaPlaybackState(){
+  if(!("mediaSession" in navigator))return;
+  try{navigator.mediaSession.playbackState=audio.paused?"paused":"playing";}catch{}
+  if(!audio.paused&&Number.isFinite(audio.duration)&&audio.duration>0&&"setPositionState" in navigator.mediaSession)try{navigator.mediaSession.setPositionState({duration:audio.duration,playbackRate:audio.playbackRate,position:Math.min(audio.currentTime,audio.duration)});}catch{}
+}
+function setPlayer(title,subtitle,state){$("#player-title").textContent=title;$("#player-subtitle").textContent=subtitle;$("#player-state").textContent=state;$("#play-button").classList.add("is-playing");window.orbitUpdateMediaSession?.();}
+function setPlayerArtwork(artwork,fallback="\u266b"){const host=$("#player-art");if(!host)return;host.replaceChildren();host.style.removeProperty("background-image");if(artwork){const img=document.createElement("img");img.src=artwork;img.alt="";img.decoding="async";img.onerror=()=>{host.replaceChildren(document.createTextNode(fallback));};host.appendChild(img);}else{host.textContent=fallback;}window.orbitUpdateMediaSession?.();}
 function toggleFav(id){
   let list=favs();const found=list.some(x=>x.stationuuid===id);
   if(found)list=list.filter(x=>x.stationuuid!==id);else{const s=stations.find(x=>x.stationuuid===id)||stationCache.get(id)||currentStation;if(s)list.unshift(s);}
@@ -262,10 +288,10 @@ function showView(name){
   if(name==="music"&&!$("#audio-music-results").dataset.loaded){loadAudioMusic("afrobeats").then(()=>$("#audio-music-results").dataset.loaded="1").catch(()=>notify("Music search unavailable."));}
   if(name==="music-video"&&!$("#music-video-results").dataset.loaded){loadYouTubeMusic("trending afrobeats").then(()=>$("#music-video-results").dataset.loaded="1").catch(()=>notify("Music video search unavailable."));}
   if(name==="movies"&&!$("#movie-results").dataset.loaded){loadArchiveFilms("trending").then(()=>$("#movie-results").dataset.loaded="1").catch(()=>$("#movie-results").innerHTML='<div class="empty-state">TMDB movie catalogue is temporarily unavailable.</div>');}
-  if(name==="audiobooks"){const books=$("#book-results");if(books&&!books.querySelector(".media-card"))loadBooks();}
   if(name==="favorites")refreshFavViews();
   if(name==="downloads")loadOfflineLibrary();
-  if(name==="omnisave"){const omni=$("#omnisave-webview");if(omni&&(!omni.src||omni.src==="about:blank"||omni.src.endsWith("about:blank")))omni.src="https://videodownloader.site/";}
+  if(name==="omnisave"&&!$("#omnisave-results")?.dataset.loaded){loadOmniMovies("popular").then(()=>$("#omnisave-results").dataset.loaded="1");}
+  if(name==="audiobooks"&&!$("#book-results")?.dataset.loaded)loadBooks();
   window.scrollTo({top:0,behavior:"smooth"});
 }
 function initGlobe(){
@@ -279,7 +305,7 @@ function initGlobe(){
     if(globeResizeObserver)globeResizeObserver.disconnect();
     if(typeof ResizeObserver!=="undefined"){globeResizeObserver=new ResizeObserver(()=>{if(globeInstance&&target.clientWidth)globeInstance.width(target.clientWidth).height(Math.max(330,target.clientHeight||460));});globeResizeObserver.observe(target);}
     updateGlobe();
-  }catch(e){target.innerHTML='<div class="globe-fallback"><div class="globe-core">&#9673;</div><span>Interactive globe unavailable; use the station list.</span></div>';}
+  }catch(e){target.innerHTML='<div class="globe-fallback"><div class="globe-core">◎</div><span>Interactive globe unavailable; use the station list.</span></div>';}
 }
 function updateGlobe(){if(!globeInstance)return;const points=stations.filter(s=>Number.isFinite(Number(s.geo_lat))&&Number.isFinite(Number(s.geo_long))).map(s=>({geo_lat:Number(s.geo_lat),geo_long:Number(s.geo_long),stationuuid:s.stationuuid}));globeInstance.pointsData(points);}
 async function loadItunes(kind,term){
@@ -315,7 +341,7 @@ function clearYoutubePlayer(){
   frame?.contentWindow?.postMessage(JSON.stringify({event:"command",func:"stopVideo",args:[]}),"*");
   currentYoutubeId=null;currentYoutubePaused=false;
   const panel=$("#youtube-player-panel");
-  if(panel){panel.innerHTML='<div class="youtube-placeholder"><span>&#9835;</span><b>Choose a video to start watching</b><small>Playback is provided by YouTube.</small></div>';panel.style.display="";}
+  if(panel)panel.innerHTML='<div class="youtube-placeholder"><span>&#9835;</span><b>Choose a video to start watching</b><small>Playback is provided by YouTube.</small></div>';
 }
 function musicDuration(seconds){
   const n=Math.max(0,Number(seconds)||0);
@@ -339,7 +365,7 @@ async function spotifyConnect(){
   }
   const random=new Uint8Array(64);crypto.getRandomValues(random);
   const verifier=spotifyBase64Url(random);
-  const digest=await crypto.subtle.digest("SH&times;256",new TextEncoder().encode(verifier));
+  const digest=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(verifier));
   const challenge=spotifyBase64Url(new Uint8Array(digest));
   const stateBytes=new Uint8Array(24);crypto.getRandomValues(stateBytes);
   const state=spotifyBase64Url(stateBytes);
@@ -398,7 +424,7 @@ async function spotifyAccessToken(){
   return token;
 }
 function spotifyParseLink(value){
- const m=String(value||"").trim().match(/(?:open\.spotify\.com\/(?:embed\/)?(track|album|playlist)\/|spotify:(track|album|playlist):)([&times;Za-z0-9]{10,64})/i);
+ const m=String(value||"").trim().match(/(?:open\.spotify\.com\/(?:embed\/)?(track|album|playlist)\/|spotify:(track|album|playlist):)([A-Za-z0-9]{10,64})/i);
  return m?{type:(m[1]||m[2]).toLowerCase(),id:m[3],url:"https://open.spotify.com/"+(m[1]||m[2]).toLowerCase()+"/"+m[3]}:null;
 }
 function spotifySavedItems(){try{return JSON.parse(localStorage.getItem("orbit-spotify-saved")||"[]")}catch{return[]}}
@@ -407,23 +433,29 @@ function spotifyRenderSaved(){
  host.innerHTML=list.length?list.map((v,i)=>'<article class="media-card spotify-track-card"><h3>'+esc(v.title)+'</h3><p>Spotify '+esc(v.type)+'</p><div class="media-actions"><button type="button" data-spotify-saved-play="'+i+'">Play</button><button type="button" data-spotify-saved-remove="'+i+'">Remove</button></div></article>').join(""):'<div class="empty-state">Save a Spotify track, album or playlist to keep it here.</div>';
 }
 function spotifyEmbed(item){
- const host=$("#spotify-orbit-player"),now=$("#spotify-orbit-now");if(!host||!now)return;host.innerHTML="";
+ const host=$("#spotify-orbit-player"),now=$("#spotify-orbit-now");
+ if(!host)return;
+ host.innerHTML="";
  const frame=document.createElement("iframe");frame.title="Spotify official embedded player";frame.loading="eager";frame.allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture";frame.setAttribute("allowfullscreen","");
  frame.src="https://open.spotify.com/embed/"+item.type+"/"+encodeURIComponent(item.id)+"?utm_source=generator&theme="+(document.documentElement.dataset.theme==="light"?"1":"0");
- frame.style.cssText="display:block;width:100%;height:"+(item.type==="track"?"152px":"352px")+";border:0;border-radius:12px;background:#121212";host.appendChild(frame);now.hidden=false;
- const title=$("#spotify-orbit-now-title");if(title)title.textContent=item.title||("Spotify "+item.type);spotifySetStatus("Official Spotify "+item.type+" player loaded.");
+ frame.style.cssText="display:block;width:100%;height:"+(item.type==="track"?"152px":"352px")+";border:0;border-radius:12px;background:#121212";host.appendChild(frame);
+ if(now)now.hidden=false;
+ const nowTitle=$("#spotify-orbit-now-title");if(nowTitle)nowTitle.textContent=item.title||("Spotify "+item.type);
+ spotifySetStatus("Official Spotify "+item.type+" player loaded.");
 }
 function spotifyLoadLink(value){
  const item=spotifyParseLink(value);if(!item){notify("Enter a valid Spotify track, album or playlist link.");return;}
- item.title="Spotify "+item.type;spotifyEmbed(item);window.orbitCurrentSpotifyItem=item;const link=$("#spotify-orbit-link");if(link)link.value=item.url;
- const results=$("#spotify-orbit-results");if(results)results.innerHTML='<article class="media-card spotify-track-card"><h3>'+esc(item.title)+'</h3><p>Spotify '+esc(item.type)+'</p><div class="media-actions"><button type="button" data-spotify-save="1">Save to ORBIT</button><a class="spotify-track-link" href="'+esc(item.url)+'" target="_blank" rel="noopener noreferrer">Open on Spotify &#8599;</a></div></article>';
+ item.title="Spotify "+item.type;spotifyEmbed(item);window.orbitCurrentSpotifyItem=item;
+ const linkEl=$("#spotify-orbit-link");if(linkEl)linkEl.value=item.url;
+ const resultsEl=$("#spotify-orbit-results");
+ if(resultsEl)resultsEl.innerHTML='<article class="media-card spotify-track-card"><h3>'+esc(item.title)+'</h3><p>Spotify '+esc(item.type)+'</p><div class="media-actions"><button type="button" data-spotify-save="1">Save to ORBIT</button><a class="spotify-track-link" href="'+esc(item.url)+'" target="_blank" rel="noopener noreferrer">Open on Spotify ↗</a></div></article>';
 }
 function spotifySaveCurrent(){
  const v=window.orbitCurrentSpotifyItem;if(!v){notify("Load a Spotify link first.");return;}
  const list=spotifySavedItems();if(list.some(x=>x.type===v.type&&x.id===v.id)){notify("This Spotify item is already saved.");return;}
  list.unshift({type:v.type,id:v.id,url:v.url,title:v.title});localStorage.setItem("orbit-spotify-saved",JSON.stringify(list));spotifyRenderSaved();notify("Saved to your ORBIT Spotify library.");
 }
-function spotifyPlaySaved(i){const v=spotifySavedItems()[i];if(v){window.orbitCurrentSpotifyItem=v;spotifyEmbed(v);const link=$("#spotify-orbit-link");if(link)link.value=v.url;}}
+function spotifyPlaySaved(i){const v=spotifySavedItems()[i];if(v){window.orbitCurrentSpotifyItem=v;spotifyEmbed(v);$("#spotify-orbit-link").value=v.url;}}
 function spotifyRemoveSaved(i){const list=spotifySavedItems();list.splice(i,1);localStorage.setItem("orbit-spotify-saved",JSON.stringify(list));spotifyRenderSaved();notify("Removed from saved Spotify music.");}
 function renderMusicResults(){
   const host=$("#audio-music-results");
@@ -433,12 +465,14 @@ function renderMusicResults(){
 function musicCard(track){
   const saved=isMusicFav(track.id);
   const playLabel=track.previewOnly?"Play preview":"Play full track";
-  const providerId=String(track.providerId||track.id||"").replace(/^audius:/,"");const isAudius=(track.source==="Audius"||!track.source)&&/^\d{1,16}$/.test(providerId);const streamUrl=isAudius?"/api/audius-stream?id="+encodeURIComponent(providerId):(track.playbackUrl||"");const downloadUrl=isAudius?(track.canDownload?"/api/audius-download?id="+encodeURIComponent(providerId):streamUrl):streamUrl;const download=downloadUrl?'<button data-download-track="'+esc(track.id)+'" data-download-url="'+esc(downloadUrl)+'" data-stream-url="'+esc(streamUrl)+'" title="Save offline">Save offline</button>':"";
-  return '<article class="media-card music-audio-card"><img class="media-cover" src="'+esc(track.artwork||"") + '" alt="" loading="lazy" onerror="this.style.display=\'none\'"><h3 title="'+esc(track.title)+'">'+esc(track.title)+'</h3><p>'+esc(track.artist||"Independent artist")+'  -  '+musicDuration(track.duration)+'</p><div class="media-actions"><small>'+esc(track.source||track.genre||"Audio track")+(track.previewOnly?"  |  Preview":"")+'</small><div class="music-card-actions"><button data-audio-play="'+esc(track.id)+'">'+playLabel+'</button>'+download+'<button class="heart-button '+(saved?"saved":"")+'" data-audio-fav="'+esc(track.id)+'" title="Save favourite">'+(saved?"\u{1F496}":"\u{1F90D}")+'</button></div></div></article>';
+  const pid=track.providerId||track.id.replace(/^audius:/,"");
+  const streamUrl="/api/audius-stream?id="+encodeURIComponent(pid);
+  const download='<button data-download-track="'+esc(track.id)+'" data-stream-url="'+esc(streamUrl)+'" title="Save for offline playback">↓ Save offline</button>';
+  return '<article class="media-card music-audio-card"><img class="media-cover" src="'+esc(track.artwork||"") + '" alt="" loading="lazy" onerror="this.style.display=\'none\'"><h3 title="'+esc(track.title)+'">'+esc(track.title)+'</h3><p>'+esc(track.artist||"Independent artist")+'  -  '+musicDuration(track.duration)+'</p><div class="media-actions"><small>'+esc(track.source||track.genre||"Audio track")+(track.previewOnly?" · Preview":"")+'</small><div class="music-card-actions"><button data-audio-play="'+esc(track.id)+'">'+playLabel+'</button>'+download+'<button class="heart-button '+(saved?"saved":"")+'" data-audio-fav="'+esc(track.id)+'" title="Save favourite">'+(saved?"\u{1F496}":"\u{1F90D}")+'</button></div></div></article>';
 }
 async function loadAudioMusic(term="afrobeats"){
   const host=$("#audio-music-results");
-  host.innerHTML='<div class="loading-card">Searching Audius and Jamendo...</div>';
+  host.innerHTML='<div class="loading-card">Searching Audius and Jamendo…</div>';
   const q=(term||"trending").trim()||"trending";
   const response=await fetch("/api/music-search?q="+encodeURIComponent(q),{signal:AbortSignal.timeout(26000)});
   if(!response.ok)throw new Error("Music catalogue unavailable");
@@ -449,11 +483,10 @@ async function loadAudioMusic(term="afrobeats"){
   const connected=["Audius"];
   if(providers.jamendo)connected.push("Jamendo");
   const waiting=["Spotify","SoundCloud","Audiomack"].filter(Boolean);
-  $("#music-provider-status").textContent="Connected: "+connected.join("  |  ")+" | Setup needed: "+waiting.join("  |  ");
+  $("#music-provider-status").textContent="Connected: "+connected.join(" · ")+" | Setup needed: "+waiting.join(" · ");
   renderMusicResults();
   $("#audio-music-status").innerHTML='<span class="music-status-mark">&#9835;</span><div><b>Full-track music search</b><small>'+musicSearchResults.length+' matching tracks from '+connected.join(", ")+'. Preview-only iTunes music has been removed.</small></div>';
 }
-function setPlayerArtwork(artwork,fallback="\u266b"){const host=$("#player-art");if(!host)return;host.replaceChildren();host.style.removeProperty("background-image");if(artwork){const img=document.createElement("img");img.src=artwork;img.alt="";img.decoding="async";img.onerror=()=>{host.replaceChildren(document.createTextNode(fallback));};host.appendChild(img);}else{host.textContent=fallback;}}
 function toggleMusicFav(track){
   if(!track)return;
   let list=musicFavs();
@@ -477,35 +510,17 @@ function playAudioTrack(id){
     $("#player-fav").classList.toggle("saved",isMusicFav(track.id));
   }).catch(()=>notify("This track could not be streamed. Try another track."));
 }
-async function refreshOfflineMusicQueue(){
-  const response=await fetch("/api/offline-list",{cache:"no-store"});
-  if(!response.ok)throw new Error("Downloads are unavailable.");
-  const items=await response.json();
-  offlineMusicQueue=(Array.isArray(items)?items:[]).filter(x=>String(x.kind||"").toLowerCase()==="audio");
-  return offlineMusicQueue;
-}
-async function playOfflineMusicAt(index){
-  if(!offlineMusicQueue.length){notify("No downloaded music is available.");return;}
-  if(index<0||index>=offlineMusicQueue.length){notify("There are no more downloaded music tracks.");return;}
-  const item=offlineMusicQueue[index];
-  currentOfflineAudioId=String(item.id);currentMusicTrack=null;currentStation=null;currentYoutubeId=null;
-  clearYoutubePlayer();audio.src="/api/offline-file?id="+encodeURIComponent(item.id);
-  try{
-    await audio.play();setPlayer(item.title||"Downloaded music","Saved on this device","Offline music");
-    const art=item.artwork||"";setPlayerArtwork(art,"\u266b");$("#player-fav").textContent="\u2661";$("#player-fav").classList.remove("saved");
-
-    $("#player-art").style.backgroundSize="cover";$("#player-fav").textContent="\u2661";$("#player-fav").classList.remove("saved");
-  }catch{notify("This downloaded music file could not be played.");}
-}
+async function refreshOfflineMusicQueue(){offlineMusicQueue=(await getOfflineItems()).filter(x=>String(x.kind||"").toLowerCase()==="audio").sort((a,b)=>a.savedAt-b.savedAt);return offlineMusicQueue;}
+async function playOfflineMusicAt(index){if(!offlineMusicQueue.length){notify("No downloaded music is available.");return;}if(index<0||index>=offlineMusicQueue.length){notify("There are no more downloaded music tracks.");return;}const item=offlineMusicQueue[index];await playOffline(item.id,"audio",item.title);}
 async function stepMusic(direction){
   if(currentOfflineAudioId){
-    try{await refreshOfflineMusicQueue();}catch(error){if(currentOfflineAudioId){notify("Could not load your downloaded music list.");return;}}
+    try{await refreshOfflineMusicQueue();}catch(error){notify("Could not load your downloaded music list.");return;}
     if(offlineMusicQueue.length){
-      const currentIndex=currentOfflineAudioId?offlineMusicQueue.findIndex(x=>String(x.id)===currentOfflineAudioId):-1;
+      const currentIndex=offlineMusicQueue.findIndex(x=>String(x.id)===currentOfflineAudioId);
       const nextIndex=currentIndex<0?(direction>0?0:offlineMusicQueue.length-1):currentIndex+direction;
       await playOfflineMusicAt(nextIndex);return;
     }
-    if(currentOfflineAudioId){notify("No downloaded music is available.");return;}
+    notify("No downloaded music is available.");return;
   }
   if(!musicQueue.length||musicQueueIndex<0){notify("No downloaded music or queued music is available.");return;}
   const n=musicQueueIndex+direction;if(n<0||n>=musicQueue.length){notify("No more tracks in this list.");return;}playAudioTrack(musicQueue[n].id);
@@ -524,14 +539,14 @@ const TMDB_ROWS={
 function tmdbMovieCard(movie){
   const id=String(movie.id||"");
   const year=String(movie.releaseDate||"").slice(0,4)||"Year not listed";
-  const genres=Array.isArray(movie.genreNames)?movie.genreNames.slice(0,3).join("  |  "):"";
-  const rating=Number.isFinite(Number(movie.rating))?"&#9733; "+Number(movie.rating).toFixed(1):"";
+  const genres=Array.isArray(movie.genreNames)?movie.genreNames.slice(0,3).join(" · "):"";
+  const rating=Number.isFinite(Number(movie.rating))?"★ "+Number(movie.rating).toFixed(1):"";
   const status=movie.isFree?"Free on Spinn Radio":"TMDB catalogue";
   return '<article class="media-card film-card tmdb-film-card">'+
     '<img class="media-cover film-cover" src="'+esc(movie.poster||"")+'" alt="" loading="lazy" onerror="this.style.display=\'none\'">'+
     '<h3 title="'+esc(movie.title||"Untitled")+'">'+esc(movie.title||"Untitled")+'</h3>'+
-    '<p>'+esc(year)+(genres?'  |  '+esc(genres):'')+'</p>'+
-    '<div class="media-actions"><small>'+esc(status)+(rating?'  |  '+esc(rating):'')+'</small>'+
+    '<p>'+esc(year)+(genres?' · '+esc(genres):'')+'</p>'+
+    '<div class="media-actions"><small>'+esc(status)+(rating?' · '+esc(rating):'')+'</small>'+
     '<div class="music-card-actions"><button data-tmdb-open="'+esc(id)+'">'+(movie.isFree?"Open Spinn Movies":"Movie details")+'</button></div></div></article>';
 }
 let tmdbMovieOpenToken=0;
@@ -543,17 +558,17 @@ async function openTmdbMovie(id){
   mobileMovieListScrollY=window.scrollY;
   document.body.classList.add("mobile-film-detail-open");
   const year=String(movie.releaseDate||"").slice(0,4)||"Release date not listed";
-  const genres=Array.isArray(movie.genreNames)?movie.genreNames.join("  |  "):"";
+  const genres=Array.isArray(movie.genreNames)?movie.genreNames.join(" · "):"";
   const panel=$("#film-player-panel");
   const token=++tmdbMovieOpenToken;
-  panel.innerHTML='<button type="button" class="mobile-film-back" data-film-detail-back><span aria-hidden="true">&#8592;</span> Back to films</button><div class="film-detail">'+
+  panel.innerHTML='<button type="button" class="mobile-film-back" data-film-detail-back><span aria-hidden="true">←</span> Back to films</button><div class="film-detail">'+
     '<img class="film-detail-backdrop" src="'+esc(movie.backdrop||movie.poster||"")+'" alt="" >'+
     '<div class="film-detail-copy"><h2>'+esc(movie.title||"Untitled")+'</h2>'+
-    '<p>'+esc(year)+(genres?'  |  '+esc(genres):'')+'</p>'+
+    '<p>'+esc(year)+(genres?' · '+esc(genres):'')+'</p>'+
     '<p>'+(Number.isFinite(Number(movie.rating))?'TMDB rating: '+Number(movie.rating).toFixed(1)+'/10. ':'')+
-    'Checking ORBIT for an authorized full-length movie stream...</p></div></div>'+
-    '<div class="loading-card">Searching verified free movie sources...</div>';
-  $("#film-result-note").textContent="Checking in-app playback  |  "+(movie.title||"Film");
+    'Checking ORBIT for an authorized full-length movie stream…</p></div></div>'+
+    '<div class="loading-card">Searching verified free movie sources…</div>';
+  $("#film-result-note").textContent="Checking in-app playback · "+(movie.title||"Film");
   panel.scrollIntoView({behavior:"smooth",block:"nearest"});
   try{
     const [filmResponse,trailerResponse]=await Promise.all([
@@ -565,14 +580,14 @@ async function openTmdbMovie(id){
     let trailerData={trailers:[]};
     if(trailerResponse&&trailerResponse.ok){try{trailerData=await trailerResponse.json();}catch{}}
     if(token!==tmdbMovieOpenToken)return;
-    const trailers=(Array.isArray(trailerData.trailers)?trailerData.trailers:[]).filter(v=>/^[&times;Za-z0-9_-]{11}$/.test(v.youtubeId||"")).slice(0,6);
+    const trailers=(Array.isArray(trailerData.trailers)?trailerData.trailers:[]).filter(v=>/^[A-Za-z0-9_-]{11}$/.test(v.youtubeId||"")).slice(0,6);
     const trailerHtml='<section class="orbit-trailer-section"><h3 class="section-title">Watch the trailer</h3><p class="section-description">Preview this film here in ORBIT. Choose another trailer below if you prefer.</p>'+
-      (trailers.length?'<div id="movie-trailer-player" class="orbit-trailer-player" aria-live="polite"><iframe src="https://www.youtube-nocookie.com/embed/'+encodeURIComponent(trailers[0].youtubeId)+'?autoplay=1&playsinline=1&rel=0&modestbranding=1&origin='+encodeURIComponent(location.origin)+'" title="'+esc(trailers[0].title||movie.title+" trailer")+'" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="origin" allow="autoplay; accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen" allowfullscreen></iframe>'+
-        '<button type="button" class="trailer-picker-toggle" data-trailer-toggle aria-expanded="false">Choose trailer <span>&#9662;</span></button>'+
-        '<div class="orbit-trailer-picker" hidden><div class="orbit-trailer-picker-head"><strong>Select a trailer</strong><button type="button" data-trailer-toggle-close aria-label="Close trailer list">&times;</button></div>'+
+      (trailers.length?'<div id="movie-trailer-player" class="orbit-trailer-player" aria-live="polite"><iframe src="https://www.youtube-nocookie.com/embed/'+encodeURIComponent(trailers[0].youtubeId)+'?autoplay=1&playsinline=1&rel=0&modestbranding=1" title="'+esc(trailers[0].title||movie.title+" trailer")+'" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" sandbox="allow-scripts allow-same-origin allow-presentation" allowfullscreen></iframe>'+
+        '<button type="button" class="trailer-picker-toggle" data-trailer-toggle aria-expanded="false">Choose trailer <span>⌄</span></button>'+
+        '<div class="orbit-trailer-picker" hidden><div class="orbit-trailer-picker-head"><strong>Select a trailer</strong><button type="button" data-trailer-toggle-close aria-label="Close trailer list">×</button></div>'+
         '<div class="orbit-trailer-grid">'+trailers.map((v,i)=>'<article class="orbit-trailer-card">'+
         '<img src="'+esc(v.thumbnail||("https://img.youtube.com/vi/"+v.youtubeId+"/hqdefault.jpg"))+'" alt="" loading="lazy">'+
-        '<div><strong>'+esc(v.title||"Movie trailer")+'</strong><small>'+esc(v.source==="Netflix channel"?"Netflix  |  "+(v.channel||""):"YouTube  |  "+(v.channel||""))+'</small><button data-trailer-play="'+esc(v.youtubeId)+'" data-title="'+esc(v.title||movie.title+" trailer")+'">'+(i===0?'Replay trailer':'Play this trailer')+'</button></div></article>').join("")+'</div></div></div>':
+        '<div><strong>'+esc(v.title||"Movie trailer")+'</strong><small>'+esc(v.source==="Netflix channel"?"Netflix · "+(v.channel||""):"YouTube · "+(v.channel||""))+'</small><button data-trailer-play="'+esc(v.youtubeId)+'" data-title="'+esc(v.title||movie.title+" trailer")+'">'+(i===0?'Replay trailer':'Play this trailer')+'</button></div></article>').join("")+'</div></div></div>':
         '<div class="empty-state">No matching trailer was found right now. Try again later or search another movie.</div>')+'</section>'
     const titleKey=String(movie.title||"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim();
     const matches=(Array.isArray(films)?films:[]).map(f=>{
@@ -581,40 +596,40 @@ async function openTmdbMovie(id){
     }).filter(f=>f.matchScore>0).sort((a,b)=>b.matchScore-a.matchScore).slice(0,8);
     const matchHtml=matches.map(f=>'<article class="media-card film-card">'+
       '<img class="media-cover film-cover" src="'+esc(f.artwork||"")+'" alt="" loading="lazy" >'+
-      '<h3>'+esc(f.title||movie.title)+'</h3><p>'+esc(f.year||"Year not listed")+'  |  Public domain</p>'+
+      '<h3>'+esc(f.title||movie.title)+'</h3><p>'+esc(f.year||"Year not listed")+' · Public domain</p>'+
       '<div class="media-actions"><small>Verified public-domain listing</small><div class="music-card-actions">'+
       '<button data-film-play="'+esc(f.id)+'" data-title="'+esc(f.title||movie.title)+'">Watch inside ORBIT</button>'+
       '<button data-download-film="'+esc(f.id)+'" title="Download for offline viewing">Download</button>'+
       '</div></div></article>').join("");
-    panel.innerHTML='<button type="button" class="mobile-film-back" data-film-detail-back><span aria-hidden="true">&#8592;</span> Back to films</button>'+trailerHtml+'<div class="film-detail">'+
+    panel.innerHTML='<button type="button" class="mobile-film-back" data-film-detail-back><span aria-hidden="true">←</span> Back to films</button>'+trailerHtml+'<div class="film-detail">'+
       '<img class="film-detail-backdrop" src="'+esc(movie.backdrop||movie.poster||"")+'" alt="" >'+
       '<div class="film-detail-copy"><h2>'+esc(movie.title||"Untitled")+'</h2>'+
-      '<p>'+esc(year)+(genres?'  |  '+esc(genres):'')+'</p>'+
+      '<p>'+esc(year)+(genres?' · '+esc(genres):'')+'</p>'+
       '<p>'+(Number.isFinite(Number(movie.rating))?'TMDB rating: '+Number(movie.rating).toFixed(1)+'/10. ':'')+
       'TMDB provides movie information. ORBIT checks authorized full-film sources separately.</p></div></div>' +
 
       (matches.length?'<h3 class="section-title">Available to watch inside ORBIT</h3><div class="media-grid">'+matchHtml+'</div>':
-      '<div class="empty-state">A verified full-length free stream or downloadable copy was not found for this title. You can still watch the trailer above. Browse ORBIT\'s free public-domain movie collection below. Commercial movies require a separate streaming licence.<div class="music-card-actions" style="margin-top:12px"><button data-browse-free-movies>Browse free full movies</button></div></div>');
-    $("#film-result-note").textContent=matches.length?matches.length+" authorized free match(es)  |  In-app playback and download":"No authorized full-film source found for this title";
+      '<div class="empty-state">A verified full-length free stream or downloadable copy was not found for this title. You can still watch the trailer above. Browse ORBIT’s free public-domain movie collection below. Commercial movies require a separate streaming licence.<div class="music-card-actions" style="margin-top:12px"><button data-browse-free-movies>Browse free full movies</button></div></div>');
+    $("#film-result-note").textContent=matches.length?matches.length+" authorized free match(es) · In-app playback and download":"No authorized full-film source found for this title";
   }catch(error){
     if(token!==tmdbMovieOpenToken)return;
-    panel.innerHTML='<button type="button" class="mobile-film-back" data-film-detail-back><span aria-hidden="true">&#8592;</span> Back to films</button><div class="film-detail-copy"><h2>'+esc(movie.title||"Untitled")+'</h2><p>Could not check full-film sources right now. Please try again.</p></div>';
+    panel.innerHTML='<button type="button" class="mobile-film-back" data-film-detail-back><span aria-hidden="true">←</span> Back to films</button><div class="film-detail-copy"><h2>'+esc(movie.title||"Untitled")+'</h2><p>Could not check full-film sources right now. Please try again.</p></div>';
     $("#film-result-note").textContent="Movie source check failed";
   }
 }
 async function loadPublicDomainFilms(term="popular"){
   const host=$("#movie-results");
-  host.innerHTML='<div class="loading-card">Searching public-domain films...</div>';
+  host.innerHTML='<div class="loading-card">Searching public-domain films…</div>';
   const response=await fetch("/api/films?q="+encodeURIComponent(term||"popular"),{signal:AbortSignal.timeout(25000)});
   if(!response.ok)throw new Error("Public-domain film catalogue unavailable");
   const films=await response.json();
   host.innerHTML=films.length?films.map(f=>'<article class="media-card film-card">'+
     '<img class="media-cover film-cover" src="'+esc(f.artwork||"")+'" alt="" loading="lazy" onerror="this.style.display=\'none\'">'+
     '<h3 title="'+esc(f.title||"Film")+'">'+esc(f.title||"Film")+'</h3>'+
-    '<p>'+esc(f.year||"Year not listed")+'  |  '+esc(f.creator||"Not listed")+'</p>'+
-    '<div class="media-actions"><small>Public domain  |  In-app playback</small><div class="music-card-actions"><button data-film-play="'+esc(f.id)+'" data-title="'+esc(f.title)+'">Watch film</button><button data-download-film="'+esc(f.id)+'" title="Download film for offline">Download</button></div></div>'+
+    '<p>'+esc(f.year||"Year not listed")+' · '+esc(f.creator||"Not listed")+'</p>'+
+    '<div class="media-actions"><small>Public domain · In-app playback</small><div class="music-card-actions"><button data-film-play="'+esc(f.id)+'" data-title="'+esc(f.title)+'">Watch film</button><button data-download-film="'+esc(f.id)+'" title="Download film for offline">Download</button></div></div>'+
     '</article>').join(""):'<div class="empty-state">No matching public-domain films were found. Try another title.</div>';
-  $("#film-result-note").textContent=films.length+" films  |  Internet Archive  |  In-app playback";
+  $("#film-result-note").textContent=films.length+" films · Internet Archive · In-app playback";
 }
 async function loadArchiveFilms(term="trending"){
   const host=$("#movie-results");
@@ -622,7 +637,7 @@ async function loadArchiveFilms(term="trending"){
   if(requested==="public-domain"||requested.startsWith("public-domain:")){
     return loadPublicDomainFilms(requested.includes(":")?requested.slice(requested.indexOf(":")+1).trim():"popular");
   }
-  host.innerHTML='<div class="loading-card">Loading TMDB movie catalogue...</div>';
+  host.innerHTML='<div class="loading-card">Loading TMDB movie catalogue…</div>';
   if(!tmdbMovieCatalog){
     const response=await fetch("/api/spinn-movies",{signal:AbortSignal.timeout(35000)});
     if(!response.ok)throw new Error("Spinn Radio TMDB catalogue is unavailable");
@@ -643,12 +658,12 @@ async function loadArchiveFilms(term="trending"){
   }
   movies=movies.slice(0,80);
   host.innerHTML=movies.length?movies.map(tmdbMovieCard).join(""):'<div class="empty-state">No matching films were found in this catalogue. Try another title or category.</div>';
-  $("#film-result-note").textContent=movies.length+" films  |  TMDB";
+  $("#film-result-note").textContent=movies.length+" films · TMDB";
 }
 function playArchiveFilm(id,title){
-  if(!/^[&times;Za-z0-9._-]{1,180}$/.test(id)){notify("This film identifier is not valid.");return;}
+  if(!/^[A-Za-z0-9._-]{1,180}$/.test(id)){notify("This film identifier is not valid.");return;}
   const panel=$("#film-player-panel");
-  panel.innerHTML='<button type="button" class="mobile-film-back" data-film-detail-back><span aria-hidden="true">&#8592;</span> Back to films</button><iframe class="archive-film-embed" src="https://archive.org/embed/'+encodeURIComponent(id)+'?autoplay=1" title="'+esc(title)+'" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>';
+  panel.innerHTML='<button type="button" class="mobile-film-back" data-film-detail-back><span aria-hidden="true">←</span> Back to films</button><iframe class="archive-film-embed" src="https://archive.org/embed/'+encodeURIComponent(id)+'?autoplay=1" title="'+esc(title)+'" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>';
   panel.scrollIntoView({behavior:"smooth",block:"nearest"});
   $("#film-result-note").textContent="Now watching  -  "+title;
 }
@@ -658,31 +673,23 @@ async function loadYouTubeMusic(term="trending music"){
   const response=await fetch("/api/youtube-search?q="+encodeURIComponent(query),{signal:AbortSignal.timeout(25000)});
   if(!response.ok)throw new Error("YouTube search unavailable");
   const results=await response.json();
-  if(!Array.isArray(results)||!results.length){host.innerHTML='<div class="empty-state">No verified playable music videos found for this search. Try another search.</div>';$("#music-result-note").textContent="No playable results";return;}
-  $("#music-result-note").textContent=results.length+" verified playable videos";
+  if(!Array.isArray(results)||!results.length){host.innerHTML='<div class="empty-state">No music videos found. Try another search.</div>';$("#music-result-note").textContent="No results";return;}
+  $("#music-result-note").textContent=results.length+" music videos found";
   host.innerHTML=results.map(x=>{
     const title=x.title||"Untitled track",artist=x.author||"Artist";
     const thumb=x.thumbnail||"";
     return '<article class="media-card music-video-card"><img class="media-cover" src="'+esc(thumb)+'" alt="" loading="lazy"><h3 title="'+esc(title)+'">'+esc(title)+'</h3><p>'+esc(artist)+' - '+esc(x.length||"")+'</p><div class="media-actions"><small>Music video</small><button data-youtube="'+esc(x.videoId)+'" data-title="'+esc(title)+'" data-artist="'+esc(artist)+'">Play video</button></div></article>';
   }).join("");
 }
+function playYouTubeAlternate(id,title){if(!/^[A-Za-z0-9_-]{11}$/.test(id))return;audio.pause();currentYoutubeId=null;const panel=$("#youtube-player-panel");panel.innerHTML='<iframe class="youtube-embed" src="https://inv.nadeko.net/embed/'+encodeURIComponent(id)+'?autoplay=1" title="'+esc(title)+' alternate player" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>';setPlayer(title,"Alternate community video player","Trying alternate source");panel.scrollIntoView({behavior:"smooth",block:"nearest"});}
 function playYouTubeVideo(id,title,artist){
-  if(!/^[&times;Za-z0-9_-]{11}$/.test(id)){notify("This video could not be played.");return;}
-  audio.pause();audio.removeAttribute("src");audio.load();
-  currentStation=null;currentOfflineAudioId=null;currentMusicTrack=null;currentYoutubeId=id;currentYoutubePaused=false;
+  if(!/^[A-Za-z0-9_-]{11}$/.test(id)){notify("This video could not be played.");return;}
+  audio.pause();audio.removeAttribute("src");audio.load();currentStation=null;currentOfflineAudioId=null;currentMusicTrack=null;currentYoutubeId=id;currentYoutubePaused=false;
   const panel=$("#youtube-player-panel");
-  if(panel){
-    panel.style.display="block";
-    panel.style.aspectRatio="auto";
-    panel.style.height="auto";
-    panel.style.maxHeight="none";
-    const embedUrl="https://www.youtube-nocookie.com/embed/"+encodeURIComponent(id)+"?autoplay=1&rel=0&playsinline=1&enablejsapi=1&origin="+encodeURIComponent(location.origin);
-    panel.innerHTML='<div class="orbit-youtube-frame" style="width:100%;aspect-ratio:16/9;position:relative;background:#000;overflow:hidden;"><iframe class="youtube-embed" src="'+embedUrl+'" title="'+esc(title)+'" referrerpolicy="origin" allow="autoplay; encrypted-media; picture-in-picture; web-share; fullscreen" allowfullscreen></iframe></div>'+
-      '<div class="youtube-player-subbar" style="display:flex;align-items:center;gap:12px;padding:10px 14px;background:rgba(13,21,30,0.92);border-radius:0 0 8px 8px;font-size:13px;border:1px solid rgba(255,255,255,0.06);border-top:none;"><span>Playing: <b>'+esc(title)+'</b> &bull; '+esc(artist)+'</span></div>';
-  }
+  panel.innerHTML='<iframe class="youtube-embed" src="https://www.youtube-nocookie.com/embed/'+encodeURIComponent(id)+'?autoplay=1&rel=0&playsinline=1&enablejsapi=1&origin='+encodeURIComponent(window.location.origin)+'" title="'+esc(title)+'" allow="autoplay; encrypted-media; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" sandbox="allow-scripts allow-same-origin allow-presentation" allowfullscreen></iframe>';
   setPlayer(title,artist,"Playing music video");
-  $("#player-art").textContent="\u266b";
-  panel?.scrollIntoView({behavior:"smooth",block:"nearest"});
+  setPlayerArtwork("","\u266b");
+  panel.scrollIntoView({behavior:"smooth",block:"nearest"});
 }const podcastEpisodeCache = new Map();
 async function loadPodcastEpisodes(id,title){
   const panel=$("#podcast-player-panel");
@@ -693,9 +700,9 @@ async function loadPodcastEpisodes(id,title){
     if(!r.ok)throw new Error("Episodes unavailable");
     const episodes=await r.json();
     episodes.forEach(ep=>podcastEpisodeCache.set(String(ep.id),ep));
-    panel.innerHTML='<div class="podcast-episodes"><div class="podcast-episodes-head"><div><b>'+esc(title)+'</b><small>'+episodes.length+' episodes available</small></div></div><div class="podcast-episode-list">'+(episodes.length?episodes.map(ep=>'<div class="podcast-episode"><div class="podcast-episode-meta"><b>'+esc(ep.title)+'</b><small>'+esc(ep.date?new Date(ep.date).toLocaleDateString():"Podcast episode")+'</small></div><div class="episode-actions"><button data-podcast-play="'+esc(ep.id)+'" title="Play episode">Play</button><button data-download-url="'+esc(ep.audio)+'" data-download-title="'+esc(ep.title)+'" data-download-kind="podcast" title="Save offline">&#8681;</button></div></div>').join(""):'<div class="empty-state">No playable episodes were supplied by Apple for this show.</div>')+'</div></div>';
+    panel.innerHTML='<div class="podcast-episodes"><div class="podcast-episodes-head"><div><b>'+esc(title)+'</b><small>'+episodes.length+' episodes available</small></div></div><div class="podcast-episode-list">'+(episodes.length?episodes.map(ep=>'<div class="podcast-episode"><div class="podcast-episode-meta"><b>'+esc(ep.title)+'</b><small>'+esc(ep.date?new Date(ep.date).toLocaleDateString():"Podcast episode")+'</small></div><div class="episode-actions"><button data-podcast-play="'+esc(ep.id)+'" title="Play episode">Play</button><button data-download-url="'+esc(ep.audio)+'" data-download-title="'+esc(ep.title)+'" data-download-kind="podcast" title="Save offline">⇩</button></div></div>').join(""):'<div class="empty-state">No playable episodes were supplied by Apple for this show.</div>')+'</div></div>';
     panel.scrollIntoView({behavior:"smooth",block:"nearest"});
-  }catch{panel.innerHTML='<div class="empty-state">Could not load this podcast\'s episode list. Try another show.</div>';}
+  }catch{panel.innerHTML='<div class="empty-state">Could not load this podcast’s episode list. Try another show.</div>';}
 }
 function playPodcastEpisode(id){
   const ep=podcastEpisodeCache.get(String(id));
@@ -703,75 +710,182 @@ function playPodcastEpisode(id){
   clearYoutubePlayer();currentStation=null;currentOfflineAudioId=null;currentMusicTrack=null;audio.src=ep.audio;
   audio.play().then(()=>setPlayer(ep.title,"Podcast episode","Podcast")).catch(()=>notify("This podcast host blocked playback in ORBIT."));
 }
+const ORBIT_OFFLINE_DB="orbit-public-offline",ORBIT_OFFLINE_STORE="media";
+function openOrbitOfflineDB(){return new Promise((resolve,reject)=>{const r=indexedDB.open(ORBIT_OFFLINE_DB,1);r.onupgradeneeded=()=>{if(!r.result.objectStoreNames.contains(ORBIT_OFFLINE_STORE))r.result.createObjectStore(ORBIT_OFFLINE_STORE,{keyPath:"id"});};r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});}
+async function offlineDBRequest(mode,fn){const db=await openOrbitOfflineDB();return new Promise((resolve,reject)=>{const tx=db.transaction(ORBIT_OFFLINE_STORE,mode),req=fn(tx.objectStore(ORBIT_OFFLINE_STORE));if(req){req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);}tx.oncomplete=()=>{db.close();if(!req)resolve(true);};tx.onerror=()=>{db.close();reject(tx.error);};});}
+async function getOfflineItems(){return (await offlineDBRequest("readonly",s=>s.getAll()))||[];}
+async function getOfflineItem(id){return offlineDBRequest("readonly",s=>s.get(String(id)));}
+function offlineDownloadName(title,kind,mime){
+  const safe=String(title||'ORBIT download').replace(/[<>:"/\\|?*\x00-\x1f]/g,' ').replace(/\s+/g,' ').trim().slice(0,100)||'ORBIT download';
+  const type=String(mime||'').toLowerCase();
+  let ext=type.includes('mpeg')||type.includes('mp3')?'.mp3':type.includes('audio/mp4')||type.includes('m4a')?'.m4a':type.includes('video/mp4')?'.mp4':type.includes('mp4')?'.mp4':type.includes('ogg')?'.ogg':type.includes('wav')?'.wav':type.includes('webm')?'.webm':type.includes('flac')?'.flac':type.includes('aac')?'.aac':type.includes('m4a')?'.m4a':(String(kind).toLowerCase()==='film'||String(kind).toLowerCase()==='video'?'.mp4':'.mp3');
+  return safe.replace(/\.(mp3|mp4|m4a|ogg|wav|webm|flac|aac|audio)$/i,'')+ext;
+}
 async function downloadOffline(url,title,kind,artwork,button){
- if(!window.orbitDesktop?.downloadMedia){notify("Offline downloads are available in the ORBIT desktop app.");return false;}
- const original=button?.textContent||"Download";
- if(button){button.disabled=true;button.classList.add("is-downloading");button.setAttribute("aria-busy","true");button.textContent="Downloading...";}
- notify("Downloading "+(title||"media")+"...");
- try{
-  await window.orbitDesktop.downloadMedia({url,title,kind,artwork:artwork||""});
-  notify("Download complete: "+(title||"media"));
-  if(button)button.textContent="Downloaded";
-  return true;
- }catch(error){
-  notify(error?.message||"Download failed. This source may restrict downloads.");
-  if(button)button.textContent=original;
-  return false;
- }finally{
-  if(button){button.disabled=false;button.classList.remove("is-downloading");button.removeAttribute("aria-busy");if(button.textContent==="Downloaded")setTimeout(()=>{if(button.isConnected)button.textContent=original;},2600);}
- }
-}
-async function loadOfflineLibrary(){
-  const host=$("#offline-results");host.innerHTML='<div class="loading-card">Loading saved media...</div>';
+  const original=button?.textContent||'Download';
+  if(button){button.disabled=true;button.textContent='Downloading…';}
+  notify('Downloading '+(title||'media')+' to your device…');
+  let blobUrl='';
   try{
-    const r=await fetch("/api/offline-list");if(!r.ok)throw new Error();
-    const items=await r.json();
-    host.innerHTML=items.length?items.map(x=>'<article class="media-card offline-card">'+(x.artwork?'<img class="media-cover" src="'+esc(x.artwork)+'" alt="" loading="lazy">':'<div class="media-cover offline-placeholder">ORBIT</div>')+'<h3 title="'+esc(x.title)+'">'+esc(x.title)+'</h3><p>'+esc(x.kind.toUpperCase())+'  |  '+(Number(x.bytes)/1048576).toFixed(1)+' MB  |  saved '+new Date(x.savedAt).toLocaleDateString()+'</p><div class="media-actions"><button data-offline-play="'+esc(x.id)+'" data-offline-kind="'+esc(x.kind)+'" data-offline-title="'+esc(x.title)+'">Play offline</button><button data-offline-delete="'+esc(x.id)+'">Remove</button></div></article>').join(""):'<div class="empty-state">Nothing downloaded yet. Use the download arrow on supported music, podcast episodes and public-domain films.</div>';
-  }catch{host.innerHTML='<div class="empty-state">Your offline library could not be opened.</div>';}
-}
-function playOffline(id,kind,title){
-  const src="/api/offline-file?id="+encodeURIComponent(id);
-  if(kind==="film"||kind==="video"){
-    const panel=$("#film-player-panel");showView("movies");
-    panel.innerHTML='<video class="offline-video" src="'+src+'" controls autoplay playsinline></video>';attachOrbitVideoEnhancement(panel.querySelector("video"));
-    panel.scrollIntoView({behavior:"smooth",block:"nearest"});setPlayer(title,"Saved on this device","Offline video");return;
+    const r=await fetch(url,{mode:'cors',credentials:'omit',cache:'no-store'});
+    if(!r.ok)throw new Error(r.status===403?'The artist has not enabled downloads for this track.':'The source did not allow this download ('+r.status+').');
+    const blob=await r.blob();
+    if(!blob.size)throw new Error('The downloaded file was empty.');
+    const id='offline-'+Date.now()+'-'+Math.random().toString(36).slice(2,9);
+    const k=String(kind||'audio').toLowerCase()==='podcast'?'audio':String(kind||'audio').toLowerCase();
+    const filename=offlineDownloadName(title,k,blob.type);
+    // Save a browser-managed file to the visitor's normal Downloads folder.
+    blobUrl=URL.createObjectURL(blob);
+    const link=document.createElement('a');link.href=blobUrl;link.download=filename;link.style.display='none';
+    document.body.appendChild(link);link.click();link.remove();
+    // Keep a second copy in IndexedDB so ORBIT's Downloads page can play it offline.
+    try{
+      await offlineDBRequest('readwrite',s=>s.put({id,title:title||'Downloaded media',kind:k,artwork:artwork||'',savedAt:Date.now(),bytes:blob.size,mime:blob.type||'application/octet-stream',filename,blob}));
+      notify('Downloaded to your PC and saved in ORBIT for offline playback: '+(title||'media'));
+      if(button)button.textContent='Downloaded';
+      loadOfflineLibrary();
+    }catch(storageError){
+      notify('The file was sent to your Downloads folder, but browser storage is full or unavailable, so it was not added to ORBIT offline playback.');
+      if(button)button.textContent='Downloaded to PC';
+    }
+    return true;
+  }catch(e){
+    notify(e?.message||'Download failed. This source may block browser downloads.');
+    if(button)button.textContent=original;
+    return false;
+  }finally{
+    if(blobUrl)setTimeout(()=>URL.revokeObjectURL(blobUrl),600000);
+    if(button){button.disabled=false;if(button.textContent==='Downloaded'||button.textContent==='Downloaded to PC')setTimeout(()=>{if(button.isConnected)button.textContent=original;},3000);}
   }
-  if(String(kind).toLowerCase()==="audio"){
-    currentOfflineAudioId=String(id);clearYoutubePlayer();currentStation=null;currentMusicTrack=null;audio.src=src;
-    refreshOfflineMusicQueue().catch(()=>{});
-    audio.play().then(()=>setPlayer(title,"Saved on this device","Offline music")).catch(()=>notify("This offline file could not be played."));return;
-  }
-  currentOfflineAudioId=null;clearYoutubePlayer();currentStation=null;currentMusicTrack=null;audio.src=src;
-  audio.play().then(()=>setPlayer(title,"Saved on this device","Offline audio")).catch(()=>notify("This offline file could not be played."));
 }
-function bookCard(b){const title=b.title||"Audiobook";const author=Array.isArray(b.authors)?b.authors.map(a=>[a.first_name,a.last_name].filter(Boolean).join(" ")).join(", "):"Public domain";return '<article class="media-card book-card"><div class="media-cover book-cover">BOOK</div><h3 title="'+esc(title)+'">'+esc(title)+'</h3><p>'+esc(author)+'</p><div class="media-actions"><small>LibriVox  |  free</small><button data-bookplay="'+esc(b.url_rss||"")+'" data-title="'+esc(title)+'">Chapters</button></div></article>';}
+
+async function importOmniVideo(){
+  const input=$("#omnisave-import-file"),status=$("#omnisave-import-status"),button=$("#omnisave-import-button"),file=input?.files?.[0];
+  if(!file){notify("Choose a movie file from your device first.");return;}
+  if(!file.type.startsWith("video/")&&!/\.(mp4|mkv|webm|mov|m4v|avi)$/i.test(file.name)){notify("Please choose a supported video file.");return;}
+  if(button){button.disabled=true;button.textContent="Saving…";}
+  if(status)status.textContent="Saving "+file.name+" into this browser’s ORBIT library…";
+  try{
+    const id="omni-import-"+Date.now()+"-"+Math.random().toString(36).slice(2,8);
+    await offlineDBRequest("readwrite",s=>s.put({id,title:file.name.replace(/\.[^.]+$/,""),kind:"video",artwork:"",savedAt:Date.now(),bytes:file.size,mime:file.type||"video/mp4",filename:file.name,blob:file}));
+    if(status)status.textContent="Added! Open Downloads to watch it offline.";
+    notify("Movie added to ORBIT Downloads on this device.");loadOfflineLibrary();input.value="";
+  }catch(err){if(status)status.textContent="Could not save this file. Browser storage may be full or unavailable.";notify("Could not add movie: "+(err?.message||"storage error"));}
+  finally{if(button){button.disabled=false;button.textContent="Add to ORBIT Downloads";}}
+}
+async function loadOmniMovies(term="popular"){
+  const host=$("#omnisave-results"),status=$("#omnisave-status");if(!host)return;
+  const q=String(term||"popular").trim();host.innerHTML='<div class="loading-card">Searching free public-domain movies…</div>';
+  if(status)status.textContent=q.toLowerCase()==="popular"?"Popular public-domain full films · Internet Archive":"Searching public-domain titles for “"+q+"”…";
+  try{
+    const r=await fetch("/api/films?q="+encodeURIComponent(q),{signal:AbortSignal.timeout(30000),cache:"no-store"});
+    if(!r.ok)throw Error("Movie catalogue request failed ("+r.status+")");
+    const films=await r.json();
+    if(!Array.isArray(films))throw Error("Invalid movie catalogue response");
+    host.innerHTML=films.length?films.map(f=>'<article class="media-card film-card"><img class="media-cover film-cover" src="'+esc(f.artwork||"")+'" alt="" loading="lazy" onerror="this.style.display=\'none\'"><h3 title="'+esc(f.title||"Film")+'">'+esc(f.title||"Film")+'</h3><p>'+esc(f.year||"Year not listed")+' · '+esc(f.creator||"Not listed")+'</p><div class="media-actions"><small>Public domain</small><div class="music-card-actions"><button data-film-play="'+esc(f.id)+'" data-title="'+esc(f.title||"Film")+'">Watch in ORBIT</button><button data-download-film="'+esc(f.id)+'" data-title="'+esc(f.title||"Film")+'">Download</button></div></div></article>').join(""):'<div class="empty-state">No public-domain movie matches found. Try a shorter or different title.</div>';
+    if(status)status.textContent=films.length+" public-domain movies found. Download saves a file to your device and adds it to ORBIT Downloads.";
+  }catch(e){host.innerHTML='<div class="empty-state">Movie search could not connect. Check your connection and try again.</div>';if(status)status.textContent="Search failed: "+(e?.message||"catalogue unavailable");}
+}
+async function loadOfflineLibrary(){const host=$("#offline-results");if(!host)return;host.innerHTML='<div class="loading-card">Loading saved media.</div>';try{const items=await getOfflineItems();host.innerHTML=items.length?items.sort((a,b)=>b.savedAt-a.savedAt).map(x=>'<article class="media-card offline-card">'+(x.artwork?'<img class="media-cover" src="'+esc(x.artwork)+'" alt="" loading="lazy">':'<div class="media-cover offline-placeholder">ORBIT</div>')+'<h3>'+esc(x.title)+'</h3><p>'+esc(String(x.kind||"audio").toUpperCase())+' · '+(Number(x.bytes)/1048576).toFixed(1)+' MB · saved '+new Date(x.savedAt).toLocaleDateString()+'</p><div class="media-actions"><button data-offline-play="'+esc(x.id)+'" data-offline-kind="'+esc(x.kind)+'" data-offline-title="'+esc(x.title)+'">Play offline</button><button data-offline-delete="'+esc(x.id)+'">Remove</button></div></article>').join(""):'<div class="empty-state">Nothing downloaded yet. Download supported tracks or episodes and they will be saved on this device for offline playback.</div>';}catch{host.innerHTML='<div class="empty-state">Your browser could not open offline storage. Check browser storage settings.</div>';}}
+async function playOffline(id,kind,title){try{const item=await getOfflineItem(id);if(!item?.blob)throw Error();const src=URL.createObjectURL(item.blob);if(kind==="film"||kind==="video"){const panel=$("#film-player-panel");showView("movies");panel.innerHTML='<video class="offline-video" src="'+src+'" controls autoplay playsinline></video>';panel.scrollIntoView({behavior:"smooth",block:"nearest"});setPlayer(title,"Saved on this device","Offline video");return;}currentOfflineAudioId=String(id);clearYoutubePlayer();currentStation=null;currentMusicTrack=null;audio.src=src;refreshOfflineMusicQueue().catch(()=>{});await audio.play();setPlayer(title,"Saved on this device","Offline music");}catch{notify("This offline file could not be found or played.");}}
+function bookCard(b){
+  const author=Array.isArray(b.authors)?b.authors.map(a=>a.first_name+" "+a.last_name).join(", "):"Public domain";
+  const title=b.title||"Audiobook";
+  const rss=b.url_rss||"";
+  return `<article class="media-card book-card"><div class="media-cover book-cover">▤</div><h3 title="${esc(title)}">${esc(title)}</h3><p>${esc(author)}</p><div class="media-actions"><small>LibriVox, free</small><div class="music-card-actions"><button data-bookplay="${esc(rss)}" data-title="${esc(title)}">Listen</button><button data-bookdownload="${esc(rss)}" data-title="${esc(title)}" title="Save audiobook for offline playback">↓ Save offline</button></div></div></article>`;
+}
 async function loadBooks(term=""){
-  const host=$("#book-results");host.innerHTML='<div class="loading-card">Searching the LibriVox catalogue...</div>';
+  const host=$("#book-results");if(!host)return;
+  host.innerHTML='<div class="loading-card">Searching the LibriVox catalogue…</div>';
+  const cleanTerm=(term||"").trim();
+  const pillMap={popular:"",fiction:"^stories",adventure:"^adventure",poetry:"^poetry"};
+  const query=pillMap[cleanTerm.toLowerCase()]!==undefined?pillMap[cleanTerm.toLowerCase()]:cleanTerm;
   try{
-    const isGenre=["fiction","adventure","poetry"].includes(String(term||"").toLowerCase());const url="https://librivox.org/api/feed/audiobooks/?format=json&limit=30"+(isGenre?"&genre="+encodeURIComponent(term):(term?"&title="+encodeURIComponent("^"+term):""));
-    const requestUrl="/api/librivox?url="+encodeURIComponent(url);const r=await fetch(requestUrl);if(!r.ok)throw new Error("LibriVox unavailable");let books=(await r.json()).books||[];if(term&&!isGenre&&!books.length){const authorUrl="https://librivox.org/api/feed/audiobooks/?format=json&limit=30&author="+encodeURIComponent(term);const fallback=await fetch("/api/librivox?url="+encodeURIComponent(authorUrl));if(fallback.ok)books=(await fallback.json()).books||[];}
-    host.innerHTML=books.length?books.map(bookCard).join(""):'<div class="empty-state">No audiobooks found for that search.</div>';
+    let books=[];
+    if(!query){
+      const url="https://librivox.org/api/feed/audiobooks/?format=json&limit=30";
+      const r=await fetch("/api/librivox?url="+encodeURIComponent(url));
+      if(!r.ok)throw new Error("LibriVox unavailable");
+      const data=await r.json();
+      books=data.books||[];
+    }else if(query.startsWith("^")){
+      const url="https://librivox.org/api/feed/audiobooks/?format=json&limit=30&title="+encodeURIComponent(query);
+      const r=await fetch("/api/librivox?url="+encodeURIComponent(url));
+      if(!r.ok)throw new Error("LibriVox unavailable");
+      const data=await r.json();
+      books=data.books||[];
+    }else{
+      const uTitle="/api/librivox?url="+encodeURIComponent("https://librivox.org/api/feed/audiobooks/?format=json&limit=25&title=^"+encodeURIComponent(query));
+      const uAuthor="/api/librivox?url="+encodeURIComponent("https://librivox.org/api/feed/audiobooks/?format=json&limit=25&author="+encodeURIComponent(query));
+      const [r1,r2]=await Promise.allSettled([
+        fetch(uTitle).then(r=>r.ok?r.json():{books:[]}),
+        fetch(uAuthor).then(r=>r.ok?r.json():{books:[]})
+      ]);
+      const b1=r1.status==="fulfilled"?(r1.value.books||[]):[];
+      const b2=r2.status==="fulfilled"?(r2.value.books||[]):[];
+      const seen=new Set();
+      for(const b of [...b1,...b2]){
+        if(b&&b.id&&!seen.has(b.id)){
+          seen.add(b.id);
+          books.push(b);
+        }
+      }
+    }
+    host.dataset.loaded="1";
+    host.innerHTML=books.length?books.map(bookCard).join(""):'<div class="empty-state">No audiobooks found for that search. Try another title or author.</div>';
   }catch{host.innerHTML='<div class="empty-state">LibriVox could not be reached. You can still browse the catalogue at librivox.org.</div>';}
 }
-async function getBookAudioUrl(rss){const r=await fetch("/api/rss?url="+encodeURIComponent(rss),{signal:AbortSignal.timeout(20000)});if(!r.ok)throw new Error("Could not load audiobook chapters");const xml=new DOMParser().parseFromString(await r.text(),"text/xml");return Array.from(xml.querySelectorAll("item")).map((item,i)=>({title:item.querySelector("title")?.textContent?.trim()||("Chapter "+(i+1)),url:item.querySelector("enclosure")?.getAttribute("url")||""})).filter(x=>/^https:\/\//i.test(x.url));}
+async function getBookAudioUrl(rss){
+  if(!rss)throw new Error("This book has no public audio feed.");
+  const feedUrl="/api/rss?url="+encodeURIComponent(rss);
+  const r=await fetch(feedUrl);
+  if(!r.ok)throw new Error("Audiobook feed unavailable");
+  const xml=new DOMParser().parseFromString(await r.text(),"text/xml");
+  const item=xml.querySelector("item");
+  const enclosure=item?.querySelector("enclosure");
+  const src=enclosure?.getAttribute("url");
+  if(!src)throw new Error("No audio source found in feed");
+  return src;
+}
 async function playBook(rss,title){
- clearYoutubePlayer();currentOfflineAudioId=null;currentMusicTrack=null;currentStation=null;if(!rss){notify("This book has no public audio feed.");return;}
- try{const chapters=await getBookAudioUrl(rss);if(!chapters.length)throw new Error("No chapters found");window.orbitCurrentBookChapters=chapters;audio.src=chapters[0].url;await audio.play();setPlayer(title,"LibriVox / public-domain audiobook","Audiobook");const host=$("#book-results");if(host){const html=chapters.map((c,i)=>'<div class="podcast-episode"><div class="podcast-episode-meta"><b>'+esc(c.title)+'</b><small>Chapter '+(i+1)+'</small></div><div class="episode-actions"><button data-book-chapter-play="'+i+'">Play</button><button data-bookdownload="'+esc(c.url)+'" data-download-title="'+esc(title+" - "+c.title)+'">Save offline</button></div></div>').join("");host.insertAdjacentHTML("afterbegin",'<section class="book-chapters"><h3>'+esc(title)+'  |  Chapters</h3>'+html+'</section>');}}
- catch(error){notify(error?.message||"Could not load this audiobook.");}
+  clearYoutubePlayer();currentOfflineAudioId=null;currentMusicTrack=null;currentStation=null;
+  if(!rss){notify("This book has no public audio feed.");return;}
+  try{
+    const src=await getBookAudioUrl(rss);
+    audio.src=src;
+    await audio.play();
+    setPlayer(title,"LibriVox / public-domain audiobook","Audiobook");
+  }catch{
+    window.open(rss,"_blank","noopener");
+    notify("Opened the audiobook feed in a new tab.");
+  }
+}
+async function downloadBook(rss,title,button){
+  if(!rss){notify("This book has no public audio feed.");return;}
+  const original=button?.textContent||"↓ Save offline";
+  try{
+    if(button){button.disabled=true;button.textContent="Connecting…";}
+    notify("Resolving audiobook download…");
+    const src=await getBookAudioUrl(rss);
+    await downloadOffline(src,title,"audio","",button);
+  }catch(e){
+    notify(e?.message||"Audiobook download unavailable.");
+    if(button){button.disabled=false;button.textContent=original;}
+  }
 }
 function searchGlobal(term){return searchEverything(term);}
 async function searchEverything(term){
  const q=(term||"").trim();if(!q)return;
  showView("search");
- const host=$("#global-search-results");$("#global-search-caption").textContent='Showing matches for "'+q+'" across ORBIT.';host.innerHTML='<div class="loading-card">Searching radio, podcasts, audiobooks, music, music videos, films and available TV channels...</div>';
+ const host=$("#global-search-results");$("#global-search-caption").textContent='Showing matches for “'+q+'” across ORBIT.';host.innerHTML='<div class="loading-card">Searching radio, podcasts, audiobooks, music, music videos, films and available TV channels…</div>';
  const section=(name,html)=>'<section class="search-result-section"><div class="search-result-heading"><h2>'+name+'</h2></div><div class="media-grid">'+html+'</div></section>';
  const safeQ=encodeURIComponent(q);
  const tasks=await Promise.allSettled([
   radioSearch({name:q,limit:"8"}),
-  fetch("/api/audius-search?q="+safeQ,{signal:AbortSignal.timeout(22000)}).then(r=>r.ok?r.json():Promise.reject()),
+  fetch("/api/music-search?q="+safeQ,{signal:AbortSignal.timeout(22000)}).then(r=>r.ok?r.json():Promise.reject()).then(d=>Array.isArray(d)?d:(d.tracks||[])),
   fetch("/api/youtube-search?q="+safeQ,{signal:AbortSignal.timeout(25000)}).then(r=>r.ok?r.json():Promise.reject()),
   fetch("/api/spinn-movies",{signal:AbortSignal.timeout(35000)}).then(r=>r.ok?r.json():Promise.reject()),
-  fetch("/api/itunes-search?term="+safeQ+"&kind=podcast&limit=8",{signal:AbortSignal.timeout(20000)}).then(r=>r.ok?r.json():Promise.reject()),
+   fetch("/api/itunes-search?term="+safeQ+"&kind=podcast&limit=8",{signal:AbortSignal.timeout(20000)}).then(r=>r.ok?r.json():Promise.reject()),
   fetch("/api/librivox?url="+encodeURIComponent("https://librivox.org/api/feed/audiobooks/?format=json&limit=8&title="+safeQ),{signal:AbortSignal.timeout(20000)}).then(r=>r.ok?r.json():Promise.reject()),
   fetch("/api/global-search?q="+safeQ,{signal:AbortSignal.timeout(75000)}).then(r=>r.ok?r.json():Promise.reject())
  ]);
@@ -784,9 +898,10 @@ async function searchEverything(term){
  if(radio.length)blocks.push(section("Radio stations",radio.map(stationCard).join("")));
  if(tracks.length)blocks.push(section("Audio music",tracks.map(musicCard).join("")));
  if(podcasts.length)blocks.push(section("Podcasts",podcasts.map(x=>{const title=x.collectionName||x.trackName||"Podcast";return '<article class="media-card"><img class="media-cover" src="'+esc(x.artworkUrl600||x.artworkUrl100||"")+'" alt=""><h3>'+esc(title)+'</h3><p>'+esc(x.artistName||"Podcast")+'</p><div class="media-actions"><small>Podcast</small><button data-podcast="'+esc(x.collectionId||"")+'" data-title="'+esc(title)+'">Episodes</button></div></article>';}).join("")));
- if(books.length)blocks.push(section("Audiobooks",books.map(bookCard).join(""))); if(videos.length)blocks.push(section("Music videos",videos.slice(0,8).map(x=>'<article class="media-card music-video-card"><img class="media-cover" src="'+esc(x.thumbnail||"")+'" alt=""><h3>'+esc(x.title||"Music video")+'</h3><p>'+esc(x.author||"Artist")+'</p><div class="media-actions"><small>Video</small><button data-youtube="'+esc(x.videoId)+'" data-title="'+esc(x.title||"Music video")+'" data-artist="'+esc(x.author||"Artist")+'">Play video</button></div></article>').join("")));
+ if(books.length)blocks.push(section("Audiobooks",books.map(bookCard).join("")));
+ if(videos.length)blocks.push(section("Music videos",videos.slice(0,8).map(x=>'<article class="media-card music-video-card"><img class="media-cover" src="'+esc(x.thumbnail||"")+'" alt=""><h3>'+esc(x.title||"Music video")+'</h3><p>'+esc(x.author||"Artist")+'</p><div class="media-actions"><small>Video</small><button data-youtube="'+esc(x.videoId)+'" data-title="'+esc(x.title||"Music video")+'" data-artist="'+esc(x.author||"Artist")+'">Play video</button></div></article>').join("")));
  const movieMatches=tmdbMovies.filter(movie=>[movie.title,...(movie.genreNames||[])].join(" ").toLowerCase().includes(q.toLowerCase()));
- if(movieMatches.length)blocks.push(section("Movies  |  TMDB",movieMatches.slice(0,8).map(tmdbMovieCard).join("")));
+ if(movieMatches.length)blocks.push(section("Movies · TMDB",movieMatches.slice(0,8).map(tmdbMovieCard).join("")));
  if(tv&&Array.isArray(tv.channels)&&tv.channels.length){
   tv.channels.forEach(c=>{if(!orbitLiveChannels.some(x=>x.id===c.id))orbitLiveChannels.push(c);});
   (Array.isArray(tv.streams)?tv.streams:[]).forEach(st=>{if(!orbitLiveStreams.some(x=>x.url===st.url))orbitLiveStreams.push(st);});
@@ -798,19 +913,29 @@ async function searchEverything(term){
  host.innerHTML=blocks.length?blocks.join(""):'<div class="empty-state">No matches were found. Try a different title, artist, station, country or channel name. Some catalogues may be temporarily unavailable.</div>';
 }
 
-let orbitThemeMediaQuery=null;let orbitThemeListener=null;
+let orbitSystemThemeMql=null;
+function onOrbitSystemThemeChange(e){
+  if(localStorage.getItem("orbit-theme")==="system"){
+    document.documentElement.dataset.theme=e.matches?"light":"dark";
+  }
+}
 function applyOrbitTheme(theme){
   const chosen=["dark","light","system"].includes(theme)?theme:"dark";
   localStorage.setItem("orbit-theme",chosen);
-  if(orbitThemeMediaQuery&&orbitThemeListener)orbitThemeMediaQuery.removeEventListener?.("change",orbitThemeListener);
-  orbitThemeMediaQuery=window.matchMedia("(prefers-color-scheme: light)");
-  const resolve=()=>{document.documentElement.dataset.theme=chosen==="system"?(orbitThemeMediaQuery.matches?"light":"dark"):chosen;};
-  resolve();if(chosen==="system"){orbitThemeListener=resolve;orbitThemeMediaQuery.addEventListener?.("change",orbitThemeListener);}
+  if(!orbitSystemThemeMql && window.matchMedia){
+    orbitSystemThemeMql=window.matchMedia("(prefers-color-scheme: light)");
+    orbitSystemThemeMql.addEventListener?.("change",onOrbitSystemThemeChange);
+  }
+  if(chosen==="system"){
+    document.documentElement.dataset.theme=(orbitSystemThemeMql&&orbitSystemThemeMql.matches)?"light":"dark";
+  } else {
+    document.documentElement.dataset.theme=chosen;
+  }
 }
 function setupSettings(){
   const theme=$("#setting-theme"),motion=$("#setting-motion"),volume=$("#setting-volume"),volumeValue=$("#setting-volume-value"),remember=$("#setting-remember-volume"),nav=$("#setting-nav-visible");
   if(!theme)return;
-  theme.value=localStorage.getItem("orbit-theme")||(document.documentElement.classList.contains("orbit-desktop-app")?"dark":"light");
+  theme.value=localStorage.getItem("orbit-theme")||"light";
   motion.checked=localStorage.getItem("orbit-reduce-motion")==="1";
   remember.checked=localStorage.getItem("orbit-remember-volume")!=="0";
   nav.checked=localStorage.getItem("orbit-nav-hidden")!=="1";
@@ -822,7 +947,7 @@ function setupSettings(){
   volume.addEventListener("input",()=>{orbitBaseVolume=Number(volume.value)/100;applyOrbitSound(orbitSoundMode);volumeValue.textContent=volume.value+"%";if(remember.checked)localStorage.setItem("orbit-volume",volume.value);});
   remember.addEventListener("change",()=>{localStorage.setItem("orbit-remember-volume",remember.checked?"1":"0");if(!remember.checked)localStorage.removeItem("orbit-volume");});
   nav.addEventListener("change",()=>{document.body.classList.toggle("nav-hidden",!nav.checked);localStorage.setItem("orbit-nav-hidden",nav.checked?"0":"1");$("#nav-toggle").title=nav.checked?"Hide navigation":"Show navigation";});
-  $("#settings-reset").addEventListener("click",()=>{["orbit-theme","orbit-reduce-motion","orbit-volume","orbit-remember-volume","orbit-nav-hidden","orbit-sound","orbit-audiobooks","orbit-global-live"].forEach(k=>localStorage.removeItem(k));theme.value=document.documentElement.classList.contains("orbit-desktop-app")?"dark":"light";motion.checked=false;remember.checked=true;nav.checked=true;volume.value="80";volumeValue.textContent="80%";orbitBaseVolume=.8;audio.volume=.8;const soundSelect=$("#setting-sound");if(soundSelect)soundSelect.value="normal";orbitSoundMode="normal";document.documentElement.classList.remove("reduce-motion");applyOrbitSound("normal");applyOrbitTheme(theme.value);document.body.classList.remove("nav-hidden");$("#nav-toggle").title="Hide navigation";notify("Settings restored to defaults.");});
+  $("#settings-reset").addEventListener("click",()=>{["orbit-theme","orbit-reduce-motion","orbit-volume","orbit-remember-volume","orbit-nav-hidden","orbit-sound","orbit-audiobooks","orbit-global-live"].forEach(k=>localStorage.removeItem(k));theme.value="light";motion.checked=false;remember.checked=true;nav.checked=true;volume.value="80";volumeValue.textContent="80%";orbitBaseVolume=.8;audio.volume=.8;const soundSelect=$("#setting-sound");if(soundSelect)soundSelect.value="normal";orbitSoundMode="normal";document.documentElement.classList.remove("reduce-motion");applyOrbitSound("normal");applyOrbitTheme("light");document.body.classList.remove("nav-hidden");$("#nav-toggle").title="Hide navigation";notify("Settings restored to defaults.");});
 }
 
 
@@ -852,13 +977,13 @@ async function loadGlobalLiveDirectory(countryCode=""){
  const requestToken=++orbitLiveDirectoryToken;
  try{
   if(!orbitLiveCountries.length){
-   host.innerHTML='<div class="loading-card">Loading country list...</div>';
+   host.innerHTML='<div class="loading-card">Loading country list…</div>';
    const cr=await fetch("/api/global-countries",{signal:AbortSignal.timeout(100000)});
    if(!cr.ok)throw Error("Country list unavailable");
    const countryData=await cr.json();if(requestToken!==orbitLiveDirectoryToken)return;
    orbitLiveCountries=countryData;
    const select=$("#global-tv-country");
-   select.innerHTML='<option value="">Choose a country...</option>'+orbitLiveCountries.slice().sort((a,b)=>(a.name||"").localeCompare(b.name||"")).map(c=>'<option value="'+esc(c.code)+'">'+esc(c.name)+'</option>').join("");
+   select.innerHTML='<option value="">Choose a country…</option>'+orbitLiveCountries.slice().sort((a,b)=>(a.name||"").localeCompare(b.name||"")).map(c=>'<option value="'+esc(c.code)+'">'+esc(c.name)+'</option>').join("");
   }
   const q=($("#global-tv-search").value||"").trim().toLowerCase();
   if(!countryCode&&q.length>=3){
@@ -870,7 +995,7 @@ async function loadGlobalLiveDirectory(countryCode=""){
    return;
   }
   $("#global-tv-country").value=countryCode;
-  host.innerHTML='<div class="loading-card">Loading channels for '+esc(orbitLiveCountries.find(c=>c.code===countryCode)?.name||countryCode)+'...</div>';
+  host.innerHTML='<div class="loading-card">Loading channels for '+esc(orbitLiveCountries.find(c=>c.code===countryCode)?.name||countryCode)+'…</div>';
   const response=await fetch("/api/global-channels?country="+encodeURIComponent(countryCode),{signal:AbortSignal.timeout(150000),cache:"no-store"});
   if(!response.ok)throw Error("Channel list request failed ("+response.status+")");
   const data=await response.json();if(requestToken!==orbitLiveDirectoryToken)return;
@@ -908,7 +1033,7 @@ async function playGlobalChannel(id){
  const ch=orbitLiveChannels.find(x=>x.id===id);
  const streams=orbitLiveStreams.filter(x=>x.channel===id);
  if(!ch)return;
- const video=$("#global-tv-video"),status=$("#global-tv-status");attachOrbitVideoEnhancement(video);
+ const video=$("#global-tv-video"),status=$("#global-tv-status");
  if(!streams.length){status.textContent=ch.name+" has no public stream URL listed. Try another channel.";return;}
  if(orbitLiveHls){orbitLiveHls.destroy();orbitLiveHls=null;}
  video.pause();video.removeAttribute("src");video.load();
@@ -924,8 +1049,8 @@ async function playGlobalChannel(id){
    const params=new URLSearchParams({url:stream.url});
    if(stream.referrer)params.set("ref",stream.referrer);
    if(stream.user_agent)params.set("ua",stream.user_agent);
-   const playbackUrl="/api/tv-proxy?"+params.toString();
-   status.textContent="Connecting to "+ch.name+"...";
+   const playbackUrl=window.orbitDesktop?.isDesktop?"/api/tv-proxy?"+params.toString():stream.url;
+   status.textContent="Connecting to "+ch.name+"…";
    if(orbitLiveHls){orbitLiveHls.destroy();orbitLiveHls=null;}
    video.pause();video.removeAttribute("src");video.load();
    if(/\.m3u8(?:$|\?)/i.test(stream.url)&&!video.canPlayType("application/vnd.apple.mpegurl")){
@@ -949,7 +1074,7 @@ async function playGlobalChannel(id){
     await Promise.resolve(video.play());
    }
    if(token!==orbitLivePlayToken)return;
-   status.textContent="Now playing: "+ch.name+"  |  "+(orbitLiveCountries.find(c=>c.code===ch.country)?.name||ch.country||"Global");
+   status.textContent="Now playing: "+ch.name+" · "+(orbitLiveCountries.find(c=>c.code===ch.country)?.name||ch.country||"Global");
    setPlayer(ch.name,"Global television","Live channel");return;
   }catch(e){
    if(token!==orbitLivePlayToken)return;
@@ -1018,22 +1143,19 @@ function setupEvents(){
   document.addEventListener("click",e=>{if(discoverGroup&&!discoverGroup.contains(e.target)){discoverGroup.classList.remove("is-open");discoverToggle?.setAttribute("aria-expanded","false");}});
   window.orbitDesktop?.onOfflineUpdated?.(data=>{loadOfflineLibrary();});
   window.orbitDesktop?.onOmniDownload?.(data=>{const status=$("#omnisave-status");if(status){status.textContent=data?.message||"OmniSave download update.";status.dataset.state=data?.state||"info";}if(data?.state==="completed")notify("Saved to ORBIT Downloads: "+(data?.title||"video"));else if(data?.state==="error")notify(data.message||"Download failed.");});
-  const omni=$("#omnisave-webview"),omniFrame=$("#omnisave-browser-frame"),omniStatus=$("#omnisave-status");
+  const omni=$("#omnisave-webview"),omniStatus=$("#omnisave-status");
   if(omni){
-    omni.addEventListener("did-start-loading",()=>{if(omniStatus)omniStatus.textContent="Connecting to OmniSave…";});
+    omni.addEventListener("did-start-loading",()=>{if(omniStatus)omniStatus.textContent="Connecting to videodownloader.site?";});
     omni.addEventListener("dom-ready",()=>{if(omniStatus)omniStatus.textContent="OmniSave loaded inside ORBIT. Use the website search and controls.";});
     omni.addEventListener("did-fail-load",e=>{if(e.errorCode!==-3&&omniStatus)omniStatus.textContent="The site could not be embedded or reached. Try Reload or Open website.";});
     omni.addEventListener("did-navigate",e=>{if(omniStatus){try{omniStatus.textContent="Connected: "+new URL(e.url).hostname;}catch{}}});
     const applyOmniCleanView=()=>{try{omni.executeJavaScript("(()=>{const main=document.querySelector('main')||document.body;const apply=()=>{document.querySelector('header')?.remove();document.querySelector('footer')?.remove();document.querySelectorAll('[id^=div-gpt-ad],[data-ad]').forEach(e=>e.remove());for(const e of [...main.querySelectorAll('*')]){if(e.children.length===0&&/omnisave/i.test(e.textContent||'')&&!e.closest('form')){const p=e.closest('a,button,[role=button],section,nav')||e;p.style.setProperty('display','none','important');}}document.body.style.margin='0';document.body.style.background='#0b1117';main.style.maxWidth='1100px';main.style.margin='0 auto';main.style.padding='20px 24px 36px';};apply();if(!window.__orbitCleanViewObserver){window.__orbitCleanViewObserver=new MutationObserver(()=>{clearTimeout(window.__orbitCleanViewTimer);window.__orbitCleanViewTimer=setTimeout(apply,120);});window.__orbitCleanViewObserver.observe(main,{childList:true,subtree:true});}let n=0;const retry=setInterval(()=>{apply();if(++n>=20)clearInterval(retry);},500);})()");}catch(e){}};
     omni.addEventListener("dom-ready",applyOmniCleanView);omni.addEventListener("did-finish-load",applyOmniCleanView);
   }
-  if(omniFrame){
-    omniFrame.addEventListener("load",()=>{if(!window.orbitDesktop?.isDesktop&&omniStatus)omniStatus.textContent="OmniSave page loaded. Use the website search and controls.";});
-    omniFrame.addEventListener("error",()=>{if(omniStatus)omniStatus.textContent="OmniSave could not load. Use Open website to continue.";});
-  }
-  $("#omnisave-back")?.addEventListener("click",()=>{if(omni?.canGoBack())omni.goBack();});
+  $("#omnisave-import-button")?.addEventListener("click",importOmniVideo);
+  $("#omnisave-search-form")?.addEventListener("submit",e=>{e.preventDefault();const q=$("#omnisave-query")?.value.trim();if(!q){notify("Enter a movie title to search.");return;}$("#omnisave-results").dataset.loaded="0";loadOmniMovies(q).then(()=>$("#omnisave-results").dataset.loaded="1");});
   $("#omnisave-forward")?.addEventListener("click",()=>{if(omni?.canGoForward())omni.goForward();});
-  $("#omnisave-reload")?.addEventListener("click",()=>{if(omni)omni.reload();else if(omniFrame)omniFrame.src=omniFrame.src;});
+  $("#omnisave-reload")?.addEventListener("click",()=>omni?.reload());
   $("#omnisave-open-external")?.addEventListener("click",()=>window.open("https://videodownloader.site/","_blank"));
   $$("[data-go]").forEach(b=>b.addEventListener("click",()=>showView(b.dataset.go)));
   document.addEventListener("click",e=>{
@@ -1042,26 +1164,26 @@ function setupEvents(){
     const audioPlay=e.target.closest("[data-audio-play]");if(audioPlay){playAudioTrack(audioPlay.dataset.audioPlay);return;}
     const audioFav=e.target.closest("[data-audio-fav]");if(audioFav){toggleMusicFav(musicTrackCache.get(String(audioFav.dataset.audioFav))||musicFavs().find(x=>String(x.id)===String(audioFav.dataset.audioFav)));return;}
     const film=e.target.closest("[data-film-play]");if(film){playArchiveFilm(film.dataset.filmPlay,film.dataset.title);return;}
-    const trailerToggle=e.target.closest("[data-trailer-toggle],[data-trailer-toggle-close]");if(trailerToggle){const host=$("#movie-trailer-player"),picker=host?.querySelector(".orbit-trailer-picker");const open=picker?.hidden!==false;if(picker){picker.hidden=!open;const btn=host.querySelector("[data-trailer-toggle]");if(btn){btn.setAttribute("aria-expanded",String(open));btn.innerHTML=open?'Hide trailers <span>⌃</span>':'Choose trailer <span>&#9662;</span>';}}return;}
-    const trailer=e.target.closest("[data-trailer-play]");if(trailer){const host=$("#movie-trailer-player");if(host){const picker=host.querySelector(".orbit-trailer-picker");if(picker)picker.hidden=true;const toggle=host.querySelector("[data-trailer-toggle]");if(toggle){toggle.setAttribute("aria-expanded","false");toggle.innerHTML='Choose trailer <span>&#9662;</span>';}const frame=host.querySelector("iframe");if(frame)frame.src="https://www.youtube-nocookie.com/embed/"+encodeURIComponent(trailer.dataset.trailerPlay)+"?autoplay=1&rel=0&modestbranding=1&origin="+encodeURIComponent(location.origin);host.scrollIntoView({behavior:"smooth",block:"nearest"});$("#film-result-note").textContent="Playing trailer inside ORBIT";}return;}
+    const trailerToggle=e.target.closest("[data-trailer-toggle],[data-trailer-toggle-close]");if(trailerToggle){const host=$("#movie-trailer-player"),picker=host?.querySelector(".orbit-trailer-picker");const open=picker?.hidden!==false;if(picker){picker.hidden=!open;const btn=host.querySelector("[data-trailer-toggle]");if(btn){btn.setAttribute("aria-expanded",String(open));btn.innerHTML=open?'Hide trailers <span>⌃</span>':'Choose trailer <span>⌄</span>';}}return;}
+    const trailer=e.target.closest("[data-trailer-play]");if(trailer){const host=$("#movie-trailer-player");if(host){const picker=host.querySelector(".orbit-trailer-picker");if(picker)picker.hidden=true;const toggle=host.querySelector("[data-trailer-toggle]");if(toggle){toggle.setAttribute("aria-expanded","false");toggle.innerHTML='Choose trailer <span>⌄</span>';}const frame=host.querySelector("iframe");if(frame)frame.src="https://www.youtube-nocookie.com/embed/"+encodeURIComponent(trailer.dataset.trailerPlay)+"?autoplay=1&rel=0&modestbranding=1";host.scrollIntoView({behavior:"smooth",block:"nearest"});$("#film-result-note").textContent="Playing trailer inside ORBIT";}return;}
     const browseFree=e.target.closest("[data-browse-free-movies]");if(browseFree){loadPublicDomainFilms("popular").then(()=>{$("#movie-results").scrollIntoView({behavior:"smooth",block:"start"});}).catch(()=>notify("Free movie catalogue is temporarily unavailable."));return;}
     const filmDetailBack=e.target.closest("[data-film-detail-back]");if(filmDetailBack){closeMobileMovieDetail();return;}
     const tmdbOpen=e.target.closest("[data-tmdb-open]");if(tmdbOpen){openTmdbMovie(tmdbOpen.dataset.tmdbOpen);return;}
+    const ytAlt=e.target.closest("[data-youtube-alt]");if(ytAlt){playYouTubeAlternate(ytAlt.dataset.youtubeAlt,ytAlt.dataset.title);return;}
     const yt=e.target.closest("[data-youtube]");if(yt){playYouTubeVideo(yt.dataset.youtube,yt.dataset.title,yt.dataset.artist);return;}
     const podcast=e.target.closest("[data-podcast]");if(podcast){loadPodcastEpisodes(podcast.dataset.podcast,podcast.dataset.title);return;}
     const podcastPlay=e.target.closest("[data-podcast-play]");if(podcastPlay){playPodcastEpisode(podcastPlay.dataset.podcastPlay);return;}
-    const downloadTrack=e.target.closest("[data-download-track]");if(downloadTrack){const track=musicTrackCache.get(String(downloadTrack.dataset.downloadTrack));const selected=downloadTrack.dataset.downloadUrl||downloadTrack.dataset.streamUrl||"";const url=selected.startsWith("/api/audius-")?location.origin+selected:selected;if(track&&url)downloadOffline(url,track.title,"audio",track.artwork,downloadTrack);else notify("This track has no downloadable stream URL.");return;}
+    const downloadTrack=e.target.closest("[data-download-track]");if(downloadTrack){const track=musicTrackCache.get(String(downloadTrack.dataset.downloadTrack));if(track&&track.source==="Audius"){const pid=encodeURIComponent(track.providerId||track.id.replace(/^audius:/,""));const url=track.canDownload?"/api/audius-download?id="+pid:"/api/audius-stream?id="+pid;downloadOffline(url,track.title,"audio",track.artwork,downloadTrack);}else if(downloadTrack.dataset.streamUrl){downloadOffline(downloadTrack.dataset.streamUrl,downloadTrack.dataset.downloadTitle||"Track","audio","",downloadTrack);}else notify("This track cannot be saved offline.");return;}
     const downloadUrl=e.target.closest("[data-download-url]");if(downloadUrl){downloadOffline(downloadUrl.dataset.downloadUrl,downloadUrl.dataset.downloadTitle,downloadUrl.dataset.downloadKind,"",downloadUrl);return;}
     const downloadFilm=e.target.closest("[data-download-film]");if(downloadFilm){fetch("/api/film-download-url?id="+encodeURIComponent(downloadFilm.dataset.downloadFilm)).then(r=>{if(!r.ok)throw new Error("No downloadable file listed");return r.json();}).then(x=>downloadOffline(x.url,x.title,"film","",downloadFilm)).catch(()=>notify("This archive item has no downloadable film file."));return;}
     const offlinePlay=e.target.closest("[data-offline-play]");if(offlinePlay){playOffline(offlinePlay.dataset.offlinePlay,offlinePlay.dataset.offlineKind,offlinePlay.dataset.offlineTitle);return;}
-    const offlineDelete=e.target.closest("[data-offline-delete]");if(offlineDelete){window.orbitDesktop?.deleteOffline(offlineDelete.dataset.offlineDelete).then(loadOfflineLibrary).catch(()=>notify("Could not remove this download."));return;}
+    const offlineDelete=e.target.closest("[data-offline-delete]");if(offlineDelete){if(window.orbitDesktop?.deleteOffline){window.orbitDesktop.deleteOffline(offlineDelete.dataset.offlineDelete).then(loadOfflineLibrary).catch(()=>notify("Could not remove this download."));}else{offlineDBRequest("readwrite",s=>s.delete(String(offlineDelete.dataset.offlineDelete))).then(loadOfflineLibrary).catch(()=>notify("Could not remove this download."));}return;}
     const prev=e.target.closest("[data-preview]");if(prev){radioPlayToken++;radioPlayback=null;currentStation=null;audio.src=prev.dataset.preview;audio.play().then(()=>setPlayer(prev.dataset.title,"Music preview / iTunes","Preview")).catch(()=>notify("Preview unavailable."));return;}
     const video=e.target.closest("[data-video]");if(video){window.open(video.dataset.video,"_blank","noopener");return;}
     const open=e.target.closest("[data-open]");if(open){window.open(open.dataset.open,"_blank","noopener");return;}
     const searchTv=e.target.closest("[data-search-tv]");if(searchTv){showView("global-live");playGlobalChannel(searchTv.dataset.searchTv);return;}
     const book=e.target.closest("[data-bookplay]");if(book){playBook(book.dataset.bookplay,book.dataset.title);return;}
-    const bookDownload=e.target.closest("[data-bookdownload]");if(bookDownload){downloadOffline(bookDownload.dataset.bookdownload,bookDownload.dataset.downloadTitle,"audiobook","",bookDownload);return;}
-    const chapterPlay=e.target.closest("[data-book-chapter-play]");if(chapterPlay){const chapter=window.orbitCurrentBookChapters?.[Number(chapterPlay.dataset.bookChapterPlay)];if(chapter){audio.src=chapter.url;audio.play().then(()=>setPlayer(chapter.title,"LibriVox audiobook","Audiobook")).catch(()=>notify("Chapter playback failed."));}return;}
+    const bookDl=e.target.closest("[data-bookdownload]");if(bookDl){downloadBook(bookDl.dataset.bookdownload,bookDl.dataset.title,bookDl);return;}
   });
   $("#previous-track").addEventListener("click",()=>stepMusic(-1));$("#next-track").addEventListener("click",()=>stepMusic(1));audio.addEventListener("ended",()=>stepMusic(1));
   $("#play-button").addEventListener("click",()=>{if(currentYoutubeId){const frame=$("#youtube-player-panel iframe");if(frame?.contentWindow){const command=currentYoutubePaused?"playVideo":"pauseVideo";frame.contentWindow.postMessage(JSON.stringify({event:"command",func:command,args:[]}),"*");currentYoutubePaused=!currentYoutubePaused;$("#play-button").classList.toggle("is-playing",!currentYoutubePaused);}return;}if(!audio.src){notify("Choose something to play first.");return;}if(audio.paused)audio.play().catch(()=>{});else audio.pause();$("#play-button").classList.toggle("is-playing",!audio.paused);});
@@ -1086,77 +1208,65 @@ function setupEvents(){
   $$("[data-book]").forEach(b=>b.addEventListener("click",()=>{ $$("#view-audiobooks .pill").forEach(x=>x.classList.toggle("active",x===b));loadBooks(b.dataset.book==="popular"?"":b.dataset.book);}));
   $$("#view-music .pill[data-audio-music]").forEach(b=>b.addEventListener("click",()=>{$$("#view-music .pill[data-audio-music]").forEach(x=>x.classList.toggle("active",x===b));$("#audio-music-results").dataset.loaded="";loadAudioMusic(b.dataset.audioMusic).then(()=>$("#audio-music-results").dataset.loaded="1").catch(()=>notify("Music catalogue unavailable."));}));
   $$("#music-provider-filters [data-music-provider]").forEach(b=>b.addEventListener("click",()=>{$$("#music-provider-filters .pill").forEach(x=>x.classList.toggle("active",x===b));musicProviderFilter=b.dataset.musicProvider;renderMusicResults();}));
-  audio.addEventListener("play",()=>{$("#play-button").classList.add("is-playing");$("#player-state").textContent=currentMusicTrack?"Full audio track":"Now playing";});
-  audio.addEventListener("pause",()=>{$("#play-button").classList.remove("is-playing");});
-  const navToggle=$("#nav-toggle"),playerHide=$("#player-hide"),playerReveal=$("#player-reveal"),fullscreenToggle=$("#fullscreen-toggle");
+  setupOrbitMediaSession();
+  audio.addEventListener("play",()=>{$("#play-button").classList.add("is-playing");$("#player-state").textContent=currentMusicTrack?"Full audio track":"Now playing";syncOrbitMediaPlaybackState();});
+  audio.addEventListener("pause",()=>{$("#play-button").classList.remove("is-playing");syncOrbitMediaPlaybackState();});
+  audio.addEventListener("timeupdate",syncOrbitMediaPlaybackState);
+  audio.addEventListener("durationchange",syncOrbitMediaPlaybackState);
+  audio.addEventListener("ended",()=>{if("mediaSession" in navigator)try{navigator.mediaSession.playbackState="none";}catch{}});
+  const navToggle=$("#nav-toggle"),playerHide=$("#player-hide"),playerReveal=$("#player-reveal"),playerBar=$(".player-bar"),fullscreenToggle=$("#fullscreen-toggle");
   setupSettings();setupGlobalLive();setupDiscoverUpdates();try{localStorage.removeItem("orbit-player-position");}catch{}
-  const syncFullscreen=active=>{fullscreenToggle.title=active?"Exit full screen":"Enter full screen";fullscreenToggle.setAttribute("aria-label",fullscreenToggle.title);document.body.classList.toggle("app-fullscreen",!!active);};
-  fullscreenToggle.addEventListener("click",async()=>{try{if(window.orbitDesktop?.isDesktop){const active=await window.orbitDesktop.toggleFullscreen();syncFullscreen(active);}else if(document.fullscreenElement){await document.exitFullscreen();}else{await document.documentElement.requestFullscreen();}}catch{notify("Full-screen mode is not available right now.");}});
-  if(window.orbitDesktop?.isDesktop){window.orbitDesktop.onFullscreenChange(syncFullscreen);syncFullscreen(false);}else{document.addEventListener("fullscreenchange",()=>syncFullscreen(!!document.fullscreenElement));syncFullscreen(!!document.fullscreenElement);}
-
+  const syncFullscreen=()=>{const active=!!document.fullscreenElement;fullscreenToggle.title=active?"Exit full screen":"Enter full screen";fullscreenToggle.setAttribute("aria-label",fullscreenToggle.title);document.body.classList.toggle("app-fullscreen",active);};
+  fullscreenToggle.addEventListener("click",async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else await document.documentElement.requestFullscreen();}catch{notify("Full-screen mode is not available right now.");}});
+  document.addEventListener("fullscreenchange",syncFullscreen);syncFullscreen();
   if(localStorage.getItem("orbit-nav-hidden")==="1")document.body.classList.add("nav-hidden");
   if(localStorage.getItem("orbit-player-hidden")==="1")document.body.classList.add("player-hidden");
   navToggle.addEventListener("click",()=>{const hidden=document.body.classList.toggle("nav-hidden");localStorage.setItem("orbit-nav-hidden",hidden?"1":"0");navToggle.title=hidden?"Show navigation":"Hide navigation";navToggle.setAttribute("aria-label",navToggle.title);const setting=$("#setting-nav-visible");if(setting)setting.checked=!hidden;});
-  playerHide.addEventListener("click",()=>{document.body.classList.add("player-hidden");document.body.classList.remove("mobile-player-open");document.querySelector(".player-bar")?.classList.remove("is-floating");localStorage.setItem("orbit-player-hidden","1");});
-  const fullPlayer=document.querySelector(".player-bar");
-  let revealDrag=null,suppressRevealClick=false;
-  const isDesktopPlayer=()=>!!window.orbitDesktop?.isDesktop&&innerWidth>850;
-  const applyGroupPosition=(launcherTop,launcherLeft)=>{
-    const viewportWidth=document.documentElement.clientWidth||innerWidth;
-    const viewportHeight=document.documentElement.clientHeight||innerHeight;
-    const safeLauncher=Math.max(8,Math.min(viewportHeight-playerReveal.offsetHeight-8,launcherTop));
-    playerReveal.style.top=safeLauncher+"px";playerReveal.style.bottom="auto";
-    const panelWidth=viewportWidth>850?Math.min(viewportWidth*.5,viewportWidth-48):Math.min(340,viewportWidth-48);
-    const requestedLeft=Number.isFinite(launcherLeft)?launcherLeft:16;
-    const launcherWidth=playerReveal.offsetWidth||52;
-    const safeRevealLeft=Math.max(8,Math.min(viewportWidth-launcherWidth-8,requestedLeft));
-    /* On the right half, pin the panel's RIGHT edge safely inside the page so it opens left of the launcher. */
-    const panelRequestedLeft=safeRevealLeft>viewportWidth/2?viewportWidth-panelWidth-36:safeRevealLeft+launcherWidth+12;
-    const safePanelLeft=Math.max(8,Math.min(viewportWidth-panelWidth-8,panelRequestedLeft));
-    document.body.style.setProperty("--orbit-player-reveal-left",safeRevealLeft+"px");
-    document.body.style.setProperty("--orbit-player-panel-left",safePanelLeft+"px");
-    document.body.style.setProperty("--orbit-player-panel-width",panelWidth+"px");
-    playerReveal.style.left=safeRevealLeft+"px";playerReveal.style.right="auto";
-    if(fullPlayer&&document.body.classList.contains("mobile-player-open")){
-      fullPlayer.style.left=safePanelLeft+"px";fullPlayer.style.right="auto";fullPlayer.style.width=panelWidth+"px";
-      fullPlayer.style.bottom="auto";
-      const panelTop=Math.max(8,Math.min(viewportHeight-fullPlayer.offsetHeight-8,safeLauncher+playerReveal.offsetHeight+12));
-      fullPlayer.style.top=panelTop+"px";document.body.style.setProperty("--orbit-player-panel-top",panelTop+"px");
+  const playerPositionKey="orbit-player-dock-position-v1";
+  let dockPosition=null;
+  try{dockPosition=JSON.parse(localStorage.getItem(playerPositionKey)||"null");}catch{}
+  const clampDock=(x,y)=>({x:Math.max(6,Math.min(window.innerWidth-58,x)),y:Math.max(6,Math.min(window.innerHeight-58,y))});
+  const placeDock=(x,y)=>{
+    const p=clampDock(x,y);dockPosition=p;
+    playerReveal.style.setProperty("left",p.x+"px","important");playerReveal.style.setProperty("top",p.y+"px","important");playerReveal.style.setProperty("right","auto","important");playerReveal.style.setProperty("bottom","auto","important");
+    if(!document.body.classList.contains("player-hidden")){
+      const w=Math.min(720,window.innerWidth-20),h=window.innerWidth<=760?104:84;
+      const px=Math.max(8,Math.min(window.innerWidth-w-8,p.x-8));
+      const py=Math.max(8,Math.min(window.innerHeight-h-8,p.y+62));
+      playerBar.style.setProperty("left",px+"px","important");playerBar.style.setProperty("top",py+"px","important");playerBar.style.setProperty("right","auto","important");playerBar.style.setProperty("bottom","auto","important");playerBar.style.setProperty("transform","none","important");playerBar.style.setProperty("width",w+"px","important");
     }
-    if(isDesktopPlayer()){
-      const panelTop=Math.max(8,Math.min(viewportHeight-(fullPlayer?.offsetHeight||120)-8,safeLauncher+playerReveal.offsetHeight+10));
-      document.body.style.setProperty("--orbit-player-top",panelTop+"px");document.body.style.setProperty("--orbit-player-panel-top",panelTop+"px");
-    }
+    try{localStorage.setItem(playerPositionKey,JSON.stringify(p));}catch{}
   };
-  const savedRevealY=Number(localStorage.getItem("orbit-player-reveal-y"));
-  const savedRevealX=Number(localStorage.getItem("orbit-player-reveal-x"));
-  if(Number.isFinite(savedRevealY)&&savedRevealY>0)applyGroupPosition(savedRevealY,savedRevealX);
-  playerReveal.addEventListener("click",()=>{
-    document.body.classList.remove("player-hidden");document.body.classList.add("mobile-player-open");fullPlayer?.classList.add("is-floating");
-    localStorage.setItem("orbit-player-hidden","0");
-    const y=Number(localStorage.getItem("orbit-player-reveal-y"));
-    const x=Number(localStorage.getItem("orbit-player-reveal-x"));
-    applyGroupPosition(Number.isFinite(y)&&y>0?y:Math.max(8,innerHeight-playerReveal.offsetHeight-210),Number.isFinite(x)&&x>0?x:16);
-  });
+  const showDock=()=>{document.body.classList.remove("player-hidden","mobile-player-open");localStorage.setItem("orbit-player-hidden","0");playerReveal.setAttribute("aria-label","Move player or hide it");if(dockPosition)placeDock(dockPosition.x,dockPosition.y);};
+  const hideDock=()=>{document.body.classList.add("player-hidden");document.body.classList.remove("mobile-player-open");localStorage.setItem("orbit-player-hidden","1");playerReveal.setAttribute("aria-label","Show player");};
   playerReveal.addEventListener("pointerdown",e=>{
-    if(e.button!==undefined&&e.button!==0)return;
-    const rect=playerReveal.getBoundingClientRect();
-    revealDrag={pointerId:e.pointerId,startY:e.clientY,startX:e.clientX,originY:rect.top,originX:rect.left,moved:false};
-    playerReveal.setPointerCapture?.(e.pointerId);
+    if(e.button!==0&&e.pointerType==="mouse")return;
+    e.preventDefault();
+    const pointerId=e.pointerId,startX=e.clientX,startY=e.clientY,rect=playerReveal.getBoundingClientRect(),baseX=rect.left,baseY=rect.top;
+    let moved=false;
+    try{playerReveal.setPointerCapture(pointerId);}catch{}
+    const move=ev=>{
+      if(ev.pointerId!==pointerId)return;
+      const dx=ev.clientX-startX,dy=ev.clientY-startY;
+      if(Math.hypot(dx,dy)>4)moved=true;
+      if(moved){ev.preventDefault();placeDock(baseX+dx,baseY+dy);}
+    };
+    const finish=ev=>{
+      if(ev.pointerId!==pointerId)return;
+      window.removeEventListener("pointermove",move);
+      window.removeEventListener("pointerup",finish);
+      window.removeEventListener("pointercancel",finish);
+      if(!moved){if(document.body.classList.contains("player-hidden"))showDock();else hideDock();}
+    };
+    window.addEventListener("pointermove",move,{passive:false});
+    window.addEventListener("pointerup",finish);
+    window.addEventListener("pointercancel",finish);
   });
-  playerReveal.addEventListener("pointermove",e=>{
-    if(!revealDrag||e.pointerId!==revealDrag.pointerId)return;
-    const delta=e.clientY-revealDrag.startY,deltaX=e.clientX-revealDrag.startX;
-    if(Math.abs(delta)>4||Math.abs(deltaX)>4)revealDrag.moved=true;
-    if(revealDrag.moved)applyGroupPosition(revealDrag.originY+delta,revealDrag.originX+deltaX);
-  });
-  const finishRevealDrag=e=>{
-    if(!revealDrag||e.pointerId!==revealDrag.pointerId)return;
-    if(revealDrag.moved){const rect=playerReveal.getBoundingClientRect();localStorage.setItem("orbit-player-reveal-y",String(Math.round(rect.top)));localStorage.setItem("orbit-player-reveal-x",String(Math.round(rect.left)));suppressRevealClick=true;setTimeout(()=>{suppressRevealClick=false;},250);}
-    revealDrag=null;
-  };  playerReveal.addEventListener("pointerup",finishRevealDrag);
-  playerReveal.addEventListener("pointercancel",finishRevealDrag);
-  playerReveal.addEventListener("click",e=>{if(suppressRevealClick){e.preventDefault();e.stopImmediatePropagation();suppressRevealClick=false;}},true);
+  if(!dockPosition||!Number.isFinite(dockPosition.x)||!Number.isFinite(dockPosition.y))dockPosition={x:Math.max(12,window.innerWidth-70),y:Math.max(12,window.innerHeight-(window.innerWidth<=760?260:170))};
+  placeDock(dockPosition.x,dockPosition.y);
+  if(localStorage.getItem("orbit-player-hidden")==="1")hideDock();else showDock();
+  playerHide.addEventListener("click",hideDock);
+  window.addEventListener("resize",()=>{if(dockPosition)placeDock(dockPosition.x,dockPosition.y);});
   audio.addEventListener("error",()=>{
     if(currentStation&&radioPlayback&&radioPlayback.token===radioPlayToken&&!radioPlayback.active){
       retryRadioPlayback(radioPlayToken,"Radio connection interrupted");return;
@@ -1187,9 +1297,28 @@ async function boot(){
   window.setInterval(()=>{if(!document.hidden){window.orbitDiscoverLastRefresh=Date.now();refreshDiscoverUpdates();}},10*60*1000);
 }
 boot();
-// ORBIT PWA/mobile local testing: QR + installable home-screen experience
-(async()=>{try{const info=await fetch('/api/mobile-info',{cache:'no-store'}).then(r=>r.json());const entry=(info.addresses||[]).find(x=>/wi-?fi|wireless/i.test(x.iface))||(info.addresses||[])[0];const host=entry?.address||location.hostname;const url='http://'+host+':'+info.port+'/';const a=document.getElementById('orbit-mobile-url');if(a){a.href=url;a.textContent=url;}const qr=document.getElementById('orbit-mobile-qr');if(qr)qr.src='https://api.qrserver.com/v1/create-qr-code/?size=180x180&data='+encodeURIComponent(url);const copy=document.getElementById('mobile-test-copy'),status=document.getElementById('mobile-test-copy-status');if(copy)copy.addEventListener('click',async()=>{try{await navigator.clipboard.writeText(url);if(status)status.textContent='Copied '+url;copy.textContent='Copied';}catch{if(status)status.textContent=url;}});}catch(e){const a=document.getElementById('orbit-mobile-url');if(a)a.textContent='Start ORBIT in LAN test mode first.';}})();
-if('serviceWorker' in navigator && location.protocol==='http:' && location.hostname!=='127.0.0.1' && location.hostname!=='localhost')navigator.serviceWorker.register('/sw.js').catch(()=>{});
+// ORBIT PWA/mobile: QR + installable mobile link
+(()=>{
+  const webUrl=location.origin+'/';
+  const a=document.getElementById('orbit-mobile-url');
+  if(a){a.href=webUrl;a.textContent=webUrl;}
+  const qr=document.getElementById('orbit-mobile-qr');
+  if(qr)qr.src='https://api.qrserver.com/v1/create-qr-code/?size=160x160&data='+encodeURIComponent(webUrl);
+  const copy=document.getElementById('mobile-test-copy');
+  if(copy)copy.addEventListener('click',async()=>{
+    try{
+      await navigator.clipboard.writeText(webUrl);
+      const st=document.getElementById('mobile-test-copy-status');
+      if(st)st.textContent='Copied '+webUrl;
+      copy.textContent='Copied';
+      setTimeout(()=>{if(copy.isConnected)copy.textContent='Copy phone link';},2500);
+    }catch{
+      const st=document.getElementById('mobile-test-copy-status');
+      if(st)st.textContent=webUrl;
+    }
+  });
+})();
+if('serviceWorker' in navigator && location.protocol==='https:' && location.hostname!=='127.0.0.1' && location.hostname!=='localhost'){navigator.serviceWorker.register('/sw.js',{updateViaCache:'none'}).then(reg=>reg.update()).catch(()=>{});}
 
 // ORBIT Mobile showcase: rotating feature previews
 (()=>{const root=document.querySelector('.orbit-mobile-showcase');if(!root||root.dataset.ready)return;root.dataset.ready='1';
@@ -1212,4 +1341,6 @@ if('serviceWorker' in navigator && location.protocol==='http:' && location.hostn
  const motion=document.getElementById('setting-motion');if(motion)motion.addEventListener('change',start);
  show(0);start();
 })();
+
+
 
