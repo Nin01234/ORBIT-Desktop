@@ -2,8 +2,8 @@
 function attachOrbitVideoEnhancement(video) {
   if (!video || !document.documentElement.classList.contains("orbit-desktop-app") || video.dataset.orbitEnhancementReady === "1") return;
   video.dataset.orbitEnhancementReady = "1";
-  const host = video.parentElement;
-  if (!host) return;
+  const frame = video.closest(".global-tv-screen, #film-player-panel") || video.parentElement;
+  if (!frame || !frame.parentElement) return;
 
   const panel = document.createElement("section");
   panel.className = "orbit-video-enhance-controls";
@@ -40,7 +40,7 @@ function attachOrbitVideoEnhancement(video) {
   const warning = document.createElement("small");
   warning.className = "orbit-video-enhance-warning";
   panel.append(heading, label, select, source, display, gpu, decode, note, warning);
-  host.insertBefore(panel, video.nextSibling);
+  frame.insertAdjacentElement("afterend", panel);
 
   let hardware = null;
   let decodeResults = {};

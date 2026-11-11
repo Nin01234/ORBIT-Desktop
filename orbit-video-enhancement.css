@@ -1,18 +1,62 @@
-/* ORBIT desktop-only video quality assistant */
+/* ORBIT desktop-only video quality assistant: controls live outside the clipped video frame. */
 html.orbit-desktop-app .orbit-video-enhance-controls {
- display:flex;align-items:center;flex-wrap:wrap;gap:8px 13px;
- padding:11px 12px;margin:0 0 14px;border:1px solid var(--line,#334155);
- border-radius:9px;background:var(--panel,#111c2b);color:var(--ink,#eef2f7);
- font-size:11px
+ display:grid;
+ grid-template-columns:max-content minmax(0,1fr);
+ align-items:center;
+ gap:10px 14px;
+ width:100%;
+ box-sizing:border-box;
+ position:relative;
+ clear:both;
+ padding:14px 16px;
+ margin:12px 0 16px;
+ border:1px solid var(--line,#334155);
+ border-radius:9px;
+ background:var(--panel,#111c2b);
+ color:var(--ink,#eef2f7);
+ font-size:12px;
+ line-height:1.5;
 }
-html.orbit-desktop-app .orbit-video-assistant-title{flex-basis:100%;font-size:12px}
-html.orbit-desktop-app .orbit-video-enhance-controls label{display:flex;align-items:center;gap:9px;font-weight:700}
-html.orbit-desktop-app .orbit-video-enhance-controls select{
- min-width:190px;padding:7px 9px;border:1px solid var(--line,#334155);
- border-radius:6px;background:var(--panel2,#19283b);color:inherit;font:inherit
+html.orbit-desktop-app .orbit-video-assistant-title {
+ grid-column:1/-1;
+ font-size:14px;
+ line-height:1.45;
+ white-space:normal;
+ overflow-wrap:anywhere;
+}
+html.orbit-desktop-app .orbit-video-enhance-controls label {
+ display:flex;
+ align-items:center;
+ gap:9px;
+ font-weight:700;
+ white-space:normal;
+}
+html.orbit-desktop-app .orbit-video-enhance-controls select {
+ width:100%;
+ min-width:0;
+ box-sizing:border-box;
+ padding:8px 10px;
+ border:1px solid var(--line,#334155);
+ border-radius:6px;
+ background:var(--panel2,#19283b);
+ color:inherit;
+ font:inherit;
 }
 html.orbit-desktop-app .orbit-video-source-resolution,
-html.orbit-desktop-app .orbit-video-capability-line{flex-basis:100%;font-size:10px;color:var(--muted,#9aa8b7)}
+html.orbit-desktop-app .orbit-video-capability-line,
 html.orbit-desktop-app .orbit-video-enhance-note,
-html.orbit-desktop-app .orbit-video-enhance-warning{flex-basis:100%;font-size:10px;line-height:1.5;color:var(--muted,#9aa8b7)}
-html.orbit-desktop-app .orbit-video-enhance-warning.is-caution{color:#e8b66a}
+html.orbit-desktop-app .orbit-video-enhance-warning {
+ grid-column:1/-1;
+ display:block;
+ min-width:0;
+ font-size:11px;
+ line-height:1.6;
+ white-space:normal;
+ overflow-wrap:anywhere;
+ color:var(--muted,#9aa8b7);
+}
+html.orbit-desktop-app .orbit-video-enhance-warning.is-caution { color:#e8b66a; }
+@media(max-width:600px) {
+ html.orbit-desktop-app .orbit-video-enhance-controls { grid-template-columns:1fr; gap:9px; padding:12px; }
+ html.orbit-desktop-app .orbit-video-enhance-controls>* { grid-column:1/-1; }
+}
