@@ -2,6 +2,8 @@
 const { contextBridge, ipcRenderer } = require("electron");
 contextBridge.exposeInMainWorld("orbitDesktop", Object.freeze({
   isDesktop: true,
+  toggleFullscreen: () => ipcRenderer.invoke("orbit:fullscreen-toggle"),
+  onFullscreenChange: callback => { if (typeof callback === "function") ipcRenderer.on("orbit:fullscreen-changed", (_event, active) => callback(!!active)); },
   openSpotify: () => ipcRenderer.invoke("orbit:spotify-open"),
   version: process.env.npm_package_version || "1.0.0",
   downloadMedia: item => ipcRenderer.invoke("orbit:offline-download", item),
