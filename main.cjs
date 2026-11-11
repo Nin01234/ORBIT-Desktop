@@ -946,7 +946,7 @@ async function createWindow(port) {
   const localOrigin = "http://127.0.0.1:" + port;
   mainWindow = new BrowserWindow({
     width: 1440, height: 940, minWidth: 900, minHeight: 650,
-    show: false, backgroundColor: "#0d151e",
+    show: false, backgroundColor: "#080F1C",
     title: "ORBIT, sound without borders",
     autoHideMenuBar: true,
     webPreferences: {

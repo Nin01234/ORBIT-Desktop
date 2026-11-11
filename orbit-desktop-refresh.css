@@ -1,0 +1,429 @@
+/*
+ * ORBIT Desktop — Modern Vibrant Dark refresh
+ * Scoped to Electron only. Web and mobile styling remain unchanged.
+ * UI-only overrides: no playback, navigation, API, or data behaviour changes.
+ */
+html.orbit-desktop-app {
+  color-scheme: dark;
+  --bg: #080F1C;
+  --panel: #111D2D;
+  --panel2: #19283B;
+  --line: #26384D;
+  --ink: #F8FAFC;
+  --muted: #A8B8CC;
+  --shadow: #030914;
+  --lime: #2563EB;
+  --orange: #06B6D4;
+  --blue: #38BDF8;
+  --accent: #2563EB;
+  --orbit-violet: #8B5CF6;
+  --orbit-surface: #0D1726;
+  --orbit-highlight: rgba(56,189,248,.13);
+  --radius: 12px;
+  background: var(--bg);
+}
+html.orbit-desktop-app body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: "Figtree", "Instrument Sans", Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.55;
+}
+html.orbit-desktop-app .app-shell { grid-template-columns: 248px minmax(0,1fr); }
+html.orbit-desktop-app .sidebar {
+  width: 248px;
+  padding: 30px 18px 22px;
+  background: var(--orbit-surface);
+  border-right: 1px solid var(--line);
+  box-shadow: 8px 0 28px rgba(0,0,0,.12);
+}
+html.orbit-desktop-app .brand {
+  margin: 4px 0 42px 8px;
+  color: var(--ink);
+  font-size: 21px;
+  letter-spacing: 1.6px;
+}
+html.orbit-desktop-app .brand-mark {
+  border: 1px solid #38BDF8;
+  color: #38BDF8;
+  box-shadow: 0 0 18px rgba(56,189,248,.18);
+}
+html.orbit-desktop-app .brand-dot,
+html.orbit-desktop-app .eyebrow-line { color: #38BDF8; background: #38BDF8; }
+html.orbit-desktop-app .side-label,
+html.orbit-desktop-app .eyebrow,
+html.orbit-desktop-app .breadcrumb,
+html.orbit-desktop-app .page-footer { color: var(--muted); }
+html.orbit-desktop-app .nav-link {
+  min-height: 43px;
+  border-radius: 10px;
+  color: #A8B8CC;
+  transition: background .18s ease, color .18s ease, transform .18s ease;
+}
+html.orbit-desktop-app .nav-link:hover {
+  color: #F8FAFC;
+  background: #19283B;
+}
+html.orbit-desktop-app .nav-link.active {
+  color: #FFFFFF;
+  background: linear-gradient(100deg, rgba(37,99,235,.28), rgba(6,182,212,.10));
+  box-shadow: inset 3px 0 #2563EB;
+}
+html.orbit-desktop-app .nav-link.active > span { color: #38BDF8; }
+html.orbit-desktop-app .status-card {
+  background: #111D2D;
+  border: 1px solid #26384D;
+  border-radius: 11px;
+}
+html.orbit-desktop-app .live-dot { background: #06B6D4; box-shadow: 0 0 12px rgba(6,182,212,.55); }
+html.orbit-desktop-app .main-area {
+  max-width: 1900px;
+  padding: 0 clamp(28px,3.4vw,58px) 34px;
+}
+html.orbit-desktop-app .topbar {
+  min-height: 78px;
+  border-color: var(--line);
+  margin-bottom: 30px;
+}
+html.orbit-desktop-app .breadcrumb b { color: #F8FAFC; }
+html.orbit-desktop-app .search-box,
+html.orbit-desktop-app .inline-search,
+html.orbit-desktop-app .station-search {
+  background: #0D1726;
+  border: 1px solid #30445D;
+  border-radius: 10px;
+  color: #A8B8CC;
+}
+html.orbit-desktop-app .search-box:focus-within,
+html.orbit-desktop-app .inline-search:focus,
+html.orbit-desktop-app .station-search:focus-within {
+  border-color: #38BDF8;
+  box-shadow: 0 0 0 3px rgba(56,189,248,.12);
+}
+html.orbit-desktop-app input,
+html.orbit-desktop-app select,
+html.orbit-desktop-app textarea {
+  color: var(--ink);
+}
+html.orbit-desktop-app input::placeholder,
+html.orbit-desktop-app textarea::placeholder { color: #8295AE; }
+html.orbit-desktop-app .avatar {
+  color: #fff;
+  background: linear-gradient(135deg,#2563EB,#06B6D4);
+  border: 0;
+  box-shadow: 0 4px 14px rgba(37,99,235,.28);
+}
+html.orbit-desktop-app .hero {
+  min-height: 370px;
+  border: 1px solid #29415D;
+  border-radius: 18px;
+  background:
+    radial-gradient(ellipse at 83% 12%, rgba(6,182,212,.24), transparent 38%),
+    linear-gradient(115deg,#111D2D 0%,#132844 58%,#102A43 100%);
+  box-shadow: 0 18px 48px rgba(0,0,0,.18);
+}
+html.orbit-desktop-app .hero:before {
+  background: linear-gradient(105deg,rgba(17,29,45,.94) 0%,rgba(17,29,45,.72) 50%,rgba(6,182,212,.08) 100%);
+}
+html.orbit-desktop-app .hero h1,
+html.orbit-desktop-app .page-intro h1 { color: #F8FAFC; }
+html.orbit-desktop-app .hero-copy p,
+html.orbit-desktop-app .page-intro p { color: #B7C6D9; }
+html.orbit-desktop-app .hero-index,
+html.orbit-desktop-app .hero-index span { color: #7DD3FC; }
+html.orbit-desktop-app .planet {
+  background: radial-gradient(circle at 32% 28%,#67E8F9 0%,#2563EB 28%,#163A68 62%,#08182B 82%);
+  box-shadow: inset -26px -20px 55px #030914, 0 16px 48px rgba(6,182,212,.18);
+}
+html.orbit-desktop-app .planet-land { background: #A5F3FC; }
+html.orbit-desktop-app .orbit-ring { border-color: rgba(125,211,252,.34); }
+html.orbit-desktop-app .orbit-tag {
+  color: #F8FAFC;
+  background: rgba(13,23,38,.86);
+  border: 1px solid #36516F;
+  box-shadow: 0 8px 22px rgba(0,0,0,.18);
+}
+html.orbit-desktop-app .button,
+html.orbit-desktop-app .button-light,
+html.orbit-desktop-app .button-primary,
+html.orbit-desktop-app button.primary {
+  border-radius: 9px;
+  background: #2563EB;
+  color: #FFFFFF;
+  border: 1px solid #3B82F6;
+  box-shadow: 0 5px 16px rgba(37,99,235,.22);
+  transition: background .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+html.orbit-desktop-app .button:hover,
+html.orbit-desktop-app .button-light:hover,
+html.orbit-desktop-app .button-primary:hover,
+html.orbit-desktop-app button.primary:hover {
+  background: #1D4ED8;
+  box-shadow: 0 7px 20px rgba(37,99,235,.3);
+}
+html.orbit-desktop-app .text-button,
+html.orbit-desktop-app .subtle-link {
+  border: 1px solid #36516F;
+  border-radius: 9px;
+  background: rgba(17,29,45,.55);
+  color: #DCE8F7;
+}
+html.orbit-desktop-app .text-button span,
+html.orbit-desktop-app .subtle-link span { color: #67E8F9; }
+html.orbit-desktop-app .section-heading { margin-top: 38px; }
+html.orbit-desktop-app .section-heading h2,
+html.orbit-desktop-app .page-intro h1,
+html.orbit-desktop-app .music-results-heading h2,
+html.orbit-desktop-app .film-results-heading h2 { letter-spacing: -.45px; }
+html.orbit-desktop-app .station-card,
+html.orbit-desktop-app .media-card,
+html.orbit-desktop-app .settings-card,
+html.orbit-desktop-app .live-podcast-panel,
+html.orbit-desktop-app .music-player-status,
+html.orbit-desktop-app .podcast-player-panel,
+html.orbit-desktop-app .book-chapters {
+  background: #111D2D;
+  border: 1px solid #26384D;
+  border-radius: 13px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.12);
+  color: #F8FAFC;
+}
+html.orbit-desktop-app .station-card,
+html.orbit-desktop-app .media-card { transition: border-color .18s ease, transform .18s ease, box-shadow .18s ease; }
+html.orbit-desktop-app .station-card:hover,
+html.orbit-desktop-app .media-card:hover {
+  border-color: #38BDF8;
+  transform: translateY(-3px);
+  box-shadow: 0 14px 30px rgba(0,0,0,.2), 0 0 0 1px rgba(56,189,248,.08);
+}
+html.orbit-desktop-app .station-card h3,
+html.orbit-desktop-app .media-card h3 { color: #F8FAFC; font-size: 14px; }
+html.orbit-desktop-app .station-card p,
+html.orbit-desktop-app .media-card p,
+html.orbit-desktop-app .media-actions small,
+html.orbit-desktop-app .station-card-bottom small { color: #A8B8CC; }
+html.orbit-desktop-app .station-art {
+  color: #FFFFFF;
+  background: linear-gradient(135deg,#2563EB,#06B6D4);
+}
+html.orbit-desktop-app .mini-play,
+html.orbit-desktop-app .station-row button,
+html.orbit-desktop-app .media-actions button,
+html.orbit-desktop-app .music-card-actions button[data-audio-play],
+html.orbit-desktop-app .episode-actions button,
+html.orbit-desktop-app #view-downloads .media-actions button {
+  color: #7DD3FC;
+  background: #172F4B;
+  border: 1px solid #28517A;
+  border-radius: 8px;
+}
+html.orbit-desktop-app .heart-button.saved { color: #38BDF8; }
+html.orbit-desktop-app .explore-card {
+  border: 1px solid #29415D;
+  border-radius: 14px;
+  background-color: #111D2D;
+}
+html.orbit-desktop-app .podcast-card { background-image: radial-gradient(circle at 90% 10%,rgba(139,92,246,.2),transparent 44%),linear-gradient(135deg,#111D2D,#17243B); }
+html.orbit-desktop-app .book-card { background-image: radial-gradient(circle at 85% 20%,rgba(6,182,212,.2),transparent 44%),linear-gradient(135deg,#111D2D,#12303A); }
+html.orbit-desktop-app .music-card { background-image: radial-gradient(circle at 85% 20%,rgba(37,99,235,.24),transparent 44%),linear-gradient(135deg,#111D2D,#1A2545); }
+html.orbit-desktop-app .explore-arrow,
+html.orbit-desktop-app .explore-kicker { color: #7DD3FC; }
+html.orbit-desktop-app .globe-stage,
+html.orbit-desktop-app .station-panel {
+  background: #111D2D;
+  border: 1px solid #26384D;
+  border-radius: 14px;
+}
+html.orbit-desktop-app .globe-stage {
+  background: radial-gradient(ellipse at center,#142F4A 0%,#0D1726 72%);
+}
+html.orbit-desktop-app .globe-stat b,
+html.orbit-desktop-app .panel-top h3 { color: #F8FAFC; }
+html.orbit-desktop-app .globe-stat b,
+html.orbit-desktop-app .globe-core { color: #38BDF8; }
+html.orbit-desktop-app .panel-top select,
+html.orbit-desktop-app .setting-row select,
+html.orbit-desktop-app .live-podcast-join input {
+  background: #0D1726;
+  color: #F8FAFC;
+  border: 1px solid #30445D;
+  border-radius: 9px;
+}
+html.orbit-desktop-app .pill {
+  border: 1px solid #30445D;
+  background: #0D1726;
+  color: #B7C6D9;
+  border-radius: 999px;
+}
+html.orbit-desktop-app .pill.active,
+html.orbit-desktop-app .pill:hover {
+  border-color: #2563EB;
+  background: rgba(37,99,235,.2);
+  color: #FFFFFF;
+}
+html.orbit-desktop-app .filter-pills { gap: 9px; }
+html.orbit-desktop-app .media-cover {
+  border-radius: 9px;
+  background-color: #19283B;
+}
+html.orbit-desktop-app .youtube-player-panel,
+html.orbit-desktop-app .film-player-panel,
+html.orbit-desktop-app #youtube-player-panel,
+html.orbit-desktop-app .orbit-trailer-player {
+  border: 1px solid #26384D;
+  border-radius: 14px;
+  box-shadow: 0 12px 30px rgba(0,0,0,.2);
+}
+html.orbit-desktop-app .player-bar {
+  background: rgba(13,23,38,.97);
+  border-top: 1px solid #30445D;
+  box-shadow: 0 -10px 32px rgba(0,0,0,.2);
+  backdrop-filter: blur(18px);
+}
+html.orbit-desktop-app .player-bar .player-art {
+  border: 1px solid rgba(125,211,252,.32);
+  box-shadow: 0 4px 16px rgba(6,182,212,.14);
+}
+html.orbit-desktop-app .player-controls .control-button,
+html.orbit-desktop-app .player-controls .play-button { color: #DCE8F7; }
+html.orbit-desktop-app .player-controls .play-button {
+  background: #2563EB;
+  color: #FFFFFF;
+  border-radius: 50%;
+  width: 38px;
+  height: 38px;
+}
+html.orbit-desktop-app .track-progress,
+html.orbit-desktop-app .track-progress > div { background-color: #26384D; }
+html.orbit-desktop-app .track-progress > span,
+html.orbit-desktop-app .track-progress .progress-fill { background: linear-gradient(90deg,#2563EB,#06B6D4); }
+html.orbit-desktop-app .track-meta b { color: #F8FAFC; }
+html.orbit-desktop-app .track-meta small,
+html.orbit-desktop-app .player-extra { color: #A8B8CC; }
+html.orbit-desktop-app .player-reveal {
+  background: linear-gradient(135deg,#2563EB,#06B6D4) !important;
+  color: #FFFFFF !important;
+  border: 1px solid #38BDF8 !important;
+  box-shadow: 0 8px 24px rgba(37,99,235,.3);
+}
+html.orbit-desktop-app .toast {
+  background: #2563EB;
+  color: #FFFFFF;
+  border: 1px solid #38BDF8;
+  border-radius: 10px;
+}
+html.orbit-desktop-app .settings-card h2 { color: #F8FAFC; }
+html.orbit-desktop-app .setting-row { border-color: #26384D; }
+html.orbit-desktop-app .setting-row input,
+html.orbit-desktop-app input[type="checkbox"],
+html.orbit-desktop-app input[type="range"] { accent-color: #2563EB; }
+html.orbit-desktop-app .empty-state,
+html.orbit-desktop-app .loading-card {
+  background: rgba(17,29,45,.55);
+  border-color: #36516F;
+  color: #A8B8CC;
+  border-radius: 12px;
+}
+html.orbit-desktop-app .discover-updates {
+  background: linear-gradient(135deg,#111D2D,#14243A);
+  border-color: #29415D;
+  border-radius: 16px;
+}
+html.orbit-desktop-app .discover-live-kicker,
+html.orbit-desktop-app .discover-updates-grid>[data-discover-kind]::before { color: #7DD3FC; }
+html.orbit-desktop-app :where(button,a,input,select,textarea):focus-visible {
+  outline: 2px solid #38BDF8;
+  outline-offset: 3px;
+}
+html.orbit-desktop-app .page-footer { border-color: #26384D; }
+html.orbit-desktop-app .sidebar,
+html.orbit-desktop-app .player-bar { transition: background .2s ease, border-color .2s ease, transform .28s ease; }
+
+@media (min-width: 1200px) {
+  html.orbit-desktop-app .station-grid,
+  html.orbit-desktop-app .media-grid { gap: 16px; }
+}
+@media (max-width: 1100px) and (min-width: 851px) {
+  html.orbit-desktop-app .main-area { padding-left: 24px; padding-right: 24px; }
+}
+
+
+/* Preserve the existing desktop theme preference: explicit Light uses the supplied light palette. */
+html.orbit-desktop-app[data-theme="light"] {
+  color-scheme: light;
+  --bg: #F5F8FF;
+  --panel: #FFFFFF;
+  --panel2: #EEF4FF;
+  --line: #E2E8F0;
+  --ink: #172033;
+  --muted: #64748B;
+  --shadow: #D9E2F0;
+  --lime: #2563EB;
+  --orange: #06B6D4;
+  --blue: #0EA5E9;
+  --orbit-surface: #FFFFFF;
+}
+html.orbit-desktop-app[data-theme="light"] body,
+html.orbit-desktop-app[data-theme="light"] .sidebar,
+html.orbit-desktop-app[data-theme="light"] .player-bar { background: #F5F8FF; color: #172033; }
+html.orbit-desktop-app[data-theme="light"] .sidebar { background: #FFFFFF; border-color: #E2E8F0; }
+html.orbit-desktop-app[data-theme="light"] .nav-link { color: #64748B; }
+html.orbit-desktop-app[data-theme="light"] .nav-link:hover { color: #172033; background: #EEF4FF; }
+html.orbit-desktop-app[data-theme="light"] .nav-link.active {
+  color: #1D4ED8;
+  background: #DBEAFE;
+  box-shadow: inset 3px 0 #2563EB;
+}
+html.orbit-desktop-app[data-theme="light"] .hero {
+  background: radial-gradient(ellipse at 83% 12%,rgba(6,182,212,.18),transparent 38%),linear-gradient(115deg,#FFFFFF 0%,#EEF4FF 62%,#E0F2FE 100%);
+  border-color: #D7E5F7;
+}
+html.orbit-desktop-app[data-theme="light"] .hero:before { background: linear-gradient(105deg,rgba(255,255,255,.94),rgba(238,244,255,.62),rgba(6,182,212,.06)); }
+html.orbit-desktop-app[data-theme="light"] .hero h1,
+html.orbit-desktop-app[data-theme="light"] .page-intro h1,
+html.orbit-desktop-app[data-theme="light"] .section-heading h2,
+html.orbit-desktop-app[data-theme="light"] .station-card h3,
+html.orbit-desktop-app[data-theme="light"] .media-card h3,
+html.orbit-desktop-app[data-theme="light"] .track-meta b { color: #172033; }
+html.orbit-desktop-app[data-theme="light"] .hero-copy p,
+html.orbit-desktop-app[data-theme="light"] .page-intro p,
+html.orbit-desktop-app[data-theme="light"] .station-card p,
+html.orbit-desktop-app[data-theme="light"] .media-card p { color: #64748B; }
+html.orbit-desktop-app[data-theme="light"] .station-card,
+html.orbit-desktop-app[data-theme="light"] .media-card,
+html.orbit-desktop-app[data-theme="light"] .settings-card,
+html.orbit-desktop-app[data-theme="light"] .live-podcast-panel,
+html.orbit-desktop-app[data-theme="light"] .music-player-status,
+html.orbit-desktop-app[data-theme="light"] .podcast-player-panel,
+html.orbit-desktop-app[data-theme="light"] .book-chapters,
+html.orbit-desktop-app[data-theme="light"] .globe-stage,
+html.orbit-desktop-app[data-theme="light"] .station-panel {
+  background: #FFFFFF;
+  color: #172033;
+  border-color: #E2E8F0;
+  box-shadow: 0 8px 24px rgba(23,32,51,.06);
+}
+html.orbit-desktop-app[data-theme="light"] .globe-stage { background: radial-gradient(ellipse at center,#DBEAFE,#F5F8FF 72%); }
+html.orbit-desktop-app[data-theme="light"] .search-box,
+html.orbit-desktop-app[data-theme="light"] .inline-search,
+html.orbit-desktop-app[data-theme="light"] .station-search,
+html.orbit-desktop-app[data-theme="light"] .panel-top select,
+html.orbit-desktop-app[data-theme="light"] .setting-row select {
+  background: #FFFFFF;
+  color: #172033;
+  border-color: #E2E8F0;
+}
+html.orbit-desktop-app[data-theme="light"] .pill { background: #FFFFFF; color: #64748B; border-color: #E2E8F0; }
+html.orbit-desktop-app[data-theme="light"] .pill.active,
+html.orbit-desktop-app[data-theme="light"] .pill:hover { background: #DBEAFE; color: #1D4ED8; border-color: #2563EB; }
+html.orbit-desktop-app[data-theme="light"] .player-bar { background: rgba(255,255,255,.97); border-color: #E2E8F0; }
+html.orbit-desktop-app[data-theme="light"] .player-controls .control-button { color: #475569; }
+html.orbit-desktop-app[data-theme="light"] .track-meta small,
+html.orbit-desktop-app[data-theme="light"] .player-extra { color: #64748B; }
+html.orbit-desktop-app[data-theme="light"] .text-button,
+html.orbit-desktop-app[data-theme="light"] .subtle-link { color: #172033; background: #FFFFFF; border-color: #E2E8F0; }
+html.orbit-desktop-app[data-theme="light"] .discover-updates { background: linear-gradient(135deg,#FFFFFF,#EEF4FF); border-color: #E2E8F0; }
+html.orbit-desktop-app[data-theme="light"] .orbit-tag { background: #FFFFFF; color: #172033; border-color: #E2E8F0; }
+html.orbit-desktop-app[data-theme="light"] .empty-state,
+html.orbit-desktop-app[data-theme="light"] .loading-card { background: #FFFFFF; color: #64748B; border-color: #CBD5E1; }
+html.orbit-desktop-app[data-theme="light"] :where(button,a,input,select,textarea):focus-visible { outline-color: #2563EB; }
