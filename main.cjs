@@ -22,7 +22,14 @@ let spinnMoviesCacheAt = 0;
 const youtubeAvailabilityCache = new Map();
 const JAMENDO_CLIENT_ID = "6e98aa54"; // ORBIT Jamendo application
 
-app.setAppUserModelId("com.orbit.radio");
+if (process.argv.includes("--orbit-video-test")) {
+  const testProfile = path.join(__dirname, ".orbit-video-test-profile");
+  fs.mkdirSync(testProfile, { recursive: true });
+  app.setPath("userData", testProfile);
+  app.setAppUserModelId("com.orbit.radio.video-test");
+} else {
+  app.setAppUserModelId("com.orbit.radio");
+}
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 if (!hasSingleInstanceLock) app.quit();
 
@@ -805,7 +812,7 @@ function createLocalServer(root) {
     if (pathname === "/") pathname = "/index.html";
     const target = path.resolve(root, "." + pathname);
     const relativePath = path.relative(root, target).replace(/\\/g, "/");
-    const allowedAsset = ["index.html","styles.css","orbit-feature-additions.css","orbit-ui-fixes-20261109.css","orbit-mobile.css","orbit-mobile-polish.css","orbit-mobile-landing.css","orbit-desktop-refresh.css","orbit-web-refresh.css","orbit-mobile-hero.svg","orbit-mobile-radio.svg","orbit-mobile-music.svg","orbit-mobile-movies.svg","orbit-mobile-offline.svg","orbit-mobile-podcasts.svg","mobile-bridge.js","app.js","manifest.webmanifest","sw.js","live-podcast.js"].includes(relativePath) || /^icons\/[A-Za-z0-9._-]+\.png$/i.test(relativePath);
+    const allowedAsset = ["index.html","styles.css","orbit-feature-additions.css","orbit-ui-fixes-20261109.css","orbit-mobile.css","orbit-mobile-polish.css","orbit-mobile-landing.css","orbit-desktop-refresh.css","orbit-web-refresh.css","orbit-video-enhancement.css","orbit-mobile-hero.svg","orbit-mobile-radio.svg","orbit-mobile-music.svg","orbit-mobile-movies.svg","orbit-mobile-offline.svg","orbit-mobile-podcasts.svg","mobile-bridge.js","app.js","manifest.webmanifest","sw.js","live-podcast.js","orbit-video-enhancement.js"].includes(relativePath) || /^icons\/[A-Za-z0-9._-]+\.png$/i.test(relativePath);
     if (!target.startsWith(root + path.sep) || !allowedAsset) {
       res.writeHead(404).end("Not found"); return;
     }

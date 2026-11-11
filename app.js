@@ -733,7 +733,7 @@ function playOffline(id,kind,title){
   const src="/api/offline-file?id="+encodeURIComponent(id);
   if(kind==="film"||kind==="video"){
     const panel=$("#film-player-panel");showView("movies");
-    panel.innerHTML='<video class="offline-video" src="'+src+'" controls autoplay playsinline></video>';
+    panel.innerHTML='<video class="offline-video" src="'+src+'" controls autoplay playsinline></video>';attachOrbitVideoEnhancement(panel.querySelector("video"));
     panel.scrollIntoView({behavior:"smooth",block:"nearest"});setPlayer(title,"Saved on this device","Offline video");return;
   }
   if(String(kind).toLowerCase()==="audio"){
@@ -908,7 +908,7 @@ async function playGlobalChannel(id){
  const ch=orbitLiveChannels.find(x=>x.id===id);
  const streams=orbitLiveStreams.filter(x=>x.channel===id);
  if(!ch)return;
- const video=$("#global-tv-video"),status=$("#global-tv-status");
+ const video=$("#global-tv-video"),status=$("#global-tv-status");attachOrbitVideoEnhancement(video);
  if(!streams.length){status.textContent=ch.name+" has no public stream URL listed. Try another channel.";return;}
  if(orbitLiveHls){orbitLiveHls.destroy();orbitLiveHls=null;}
  video.pause();video.removeAttribute("src");video.load();
