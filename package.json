@@ -1,48 +1,48 @@
 {
-    "name":  "orbit-radio",
-    "version":  "1.1.4",
-    "description":  "ORBIT, radio, music, podcasts, audiobooks and films",
-    "main":  "main.cjs",
-    "author":  "Nino Brown",
-    "license":  "MIT",
-    "dependencies":  {
-                         "qrcode":  "^1.5.4"
-                     },
-    "scripts":  {
-                    "start":  "electron .",
-                    "dev":  "electron . --inspect",
-                    "dist":  "electron-builder --win nsis --x64"
-                },
-    "devDependencies":  {
-                            "electron":  "^44.9.3",
-                            "electron-builder":  "^26.0.12"
-                        },
-    "build":  {
-                  "appId":  "com.orbit.radio",
-                  "productName":  "ORBIT",
-                  "directories":  {
-                                      "output":  "dist"
-                                  },
-                  "win":  {
-                              "target":  [
-                                             {
-                                                 "target":  "nsis",
-                                                 "arch":  [
-                                                              "x64"
-                                                          ]
-                                             }
-                                         ],
-                              "icon":  "orbit.ico",
-                              "artifactName":  "ORBIT-Setup-${version}-x64.exe"
-                          },
-                  "nsis":  {
-                               "oneClick":  true,
-                               "perMachine":  false,
-                               "allowToChangeInstallationDirectory":  false,
-                               "createDesktopShortcut":  true,
-                               "createStartMenuShortcut":  true,
-                               "shortcutName":  "ORBIT",
-                               "deleteAppDataOnUninstall":  false
-                           }
-              }
+    "name": "orbit-radio",
+    "version": "1.1.12",
+    "description": "ORBIT, radio, music, podcasts, audiobooks and films",
+    "main": "main.cjs",
+    "author": "Nino Brown",
+    "license": "MIT",
+    "dependencies": {
+        "qrcode": "^1.5.4"
+    },
+    "scripts": {
+        "start": "electron .",
+        "dev": "electron . --inspect",
+        "dist": "electron-builder --win nsis --x64"
+    },
+    "devDependencies": {
+        "electron": "^44.9.3",
+        "electron-builder": "^26.0.12"
+    },
+    "build": {
+        "appId": "com.orbit.radio",
+        "productName": "ORBIT",
+        "directories": {
+            "output": "dist"
+        },
+        "win": {
+            "target": [
+                {
+                    "target": "nsis",
+                    "arch": [
+                        "x64"
+                    ]
+                }
+            ],
+            "icon": "orbit.ico",
+            "artifactName": "ORBIT-Setup-${version}-x64.exe"
+        },
+        "nsis": {
+            "oneClick": true,
+            "perMachine": false,
+            "allowToChangeInstallationDirectory": false,
+            "createDesktopShortcut": true,
+            "createStartMenuShortcut": true,
+            "shortcutName": "ORBIT",
+            "deleteAppDataOnUninstall": false
+        }
+    }
 }

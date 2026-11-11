@@ -9,6 +9,8 @@ const { spawn } = require("node:child_process");
 const mime = { ".html":"text/html; charset=utf-8", ".css":"text/css; charset=utf-8", ".js":"text/javascript; charset=utf-8", ".ico":"image/x-icon", ".png":"image/png", ".webmanifest":"application/manifest+json", ".svg":"image/svg+xml" };
 let localServer;
 let mainWindow;
+let htmlMediaFullscreen = false;
+let wasFullscreenBeforeHtmlMedia = false;
 let globalCountryCache = null;
 let globalCountryCacheAt = 0;
 const globalChannelCache = new Map();
@@ -803,7 +805,7 @@ function createLocalServer(root) {
     if (pathname === "/") pathname = "/index.html";
     const target = path.resolve(root, "." + pathname);
     const relativePath = path.relative(root, target).replace(/\\/g, "/");
-    const allowedAsset = ["index.html","styles.css","orbit-feature-additions.css","orbit-ui-fixes-20261109.css","orbit-mobile.css","orbit-mobile-polish.css","orbit-mobile-landing.css","orbit-mobile-hero.svg","orbit-mobile-radio.svg","orbit-mobile-music.svg","orbit-mobile-movies.svg","orbit-mobile-offline.svg","orbit-mobile-podcasts.svg","mobile-bridge.js","app.js","manifest.webmanifest","sw.js"].includes(relativePath) || /^icons\/[A-Za-z0-9._-]+\.png$/i.test(relativePath);
+    const allowedAsset = ["index.html","styles.css","orbit-feature-additions.css","orbit-ui-fixes-20261109.css","orbit-mobile.css","orbit-mobile-polish.css","orbit-mobile-landing.css","orbit-mobile-hero.svg","orbit-mobile-radio.svg","orbit-mobile-music.svg","orbit-mobile-movies.svg","orbit-mobile-offline.svg","orbit-mobile-podcasts.svg","mobile-bridge.js","app.js","manifest.webmanifest","sw.js","live-podcast.js"].includes(relativePath) || /^icons\/[A-Za-z0-9._-]+\.png$/i.test(relativePath);
     if (!target.startsWith(root + path.sep) || !allowedAsset) {
       res.writeHead(404).end("Not found"); return;
     }
@@ -952,6 +954,31 @@ async function createWindow(port) {
       contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true, webviewTag: true
     }
   });
+  mainWindow.on("enter-full-screen", () => mainWindow?.webContents.send("orbit:fullscreen-changed", true));
+  mainWindow.on("leave-full-screen", () => mainWindow?.webContents.send("orbit:fullscreen-changed", false));
+  mainWindow.on("enter-html-full-screen", () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    wasFullscreenBeforeHtmlMedia = mainWindow.isFullScreen();
+    htmlMediaFullscreen = true;
+    if (!wasFullscreenBeforeHtmlMedia) mainWindow.setFullScreen(true);
+  });
+  mainWindow.on("leave-html-full-screen", () => {
+    if (!mainWindow || mainWindow.isDestroyed() || !htmlMediaFullscreen) return;
+    htmlMediaFullscreen = false;
+    if (!wasFullscreenBeforeHtmlMedia && mainWindow.isFullScreen()) mainWindow.setFullScreen(false);
+    wasFullscreenBeforeHtmlMedia = false;
+  });
+  mainWindow.webContents.session.setPermissionRequestHandler((webContents, permission, callback, details) => {
+    let requester, appPage;
+    try { requester = new URL(details?.requestingUrl || ""); } catch {}
+    try { appPage = new URL(webContents.getURL()); } catch {}
+    const trustedAppOrigin = requester?.protocol === "http:" && requester.hostname === "127.0.0.1" && Number(requester.port) === port;
+    const trustedTopLevel = appPage?.protocol === "http:" && appPage.hostname === "127.0.0.1" && Number(appPage.port) === port;
+    const youtubeFrame = requester?.protocol === "https:" && (requester.hostname === "youtube.com" || requester.hostname.endsWith(".youtube.com") || requester.hostname === "youtube-nocookie.com" || requester.hostname.endsWith(".youtube-nocookie.com"));
+    const isMainContents = !!mainWindow && !mainWindow.isDestroyed() && webContents === mainWindow.webContents;
+    const allowed = isMainContents && ((permission === "media" && trustedAppOrigin) || (permission === "fullscreen" && trustedTopLevel && (youtubeFrame || trustedAppOrigin)));
+    callback(allowed);
+  });
   // Allow Chromium to send the genuine ORBIT Referer and Origin; do not spoof youtube.com identity headers.
 
 
@@ -965,6 +992,8 @@ async function createWindow(port) {
 
   });
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    // Keep YouTube trailer/player links inside ORBIT.
+    if (/^https:\/\/(?:www\.)?(?:youtube\.com|youtube-nocookie\.com|youtu\.be)(?:\/|$)/i.test(url)) return { action: "deny" };
     if (/^https:\/\//i.test(url)) shell.openExternal(url);
     return { action: "deny" };
   });
@@ -972,12 +1001,18 @@ async function createWindow(port) {
     const spotifyAuthPage=/^https:\/\/(accounts|login)\.spotify\.com\//i.test(url)||/^https:\/\/accounts\.google\.com\//i.test(url);
     if (!url.startsWith(localOrigin + "/") && !spotifyAuthPage) {
       event.preventDefault();
-      if (/^https:\/\//i.test(url)) shell.openExternal(url);
+      if (!/^https:\/\/(?:www\.)?(?:youtube\.com|youtube-nocookie\.com|youtu\.be)(?:\/|$)/i.test(url) && /^https:\/\//i.test(url)) shell.openExternal(url);
     }
   });
   await mainWindow.loadURL(localOrigin + "/");
   mainWindow.on("closed", () => { mainWindow = null; });
 }
+
+ipcMain.handle("orbit:fullscreen-toggle", () => {
+  if (!mainWindow || mainWindow.isDestroyed()) return false;
+  mainWindow.setFullScreen(!mainWindow.isFullScreen());
+  return mainWindow.isFullScreen();
+});
 
 if (hasSingleInstanceLock) {
   app.whenReady().then(async () => {
