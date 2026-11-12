@@ -35,6 +35,18 @@ const spinnStationCache = new Map();
 let spinnMoviesCache = null;
 let spinnMoviesCacheAt = 0;
 const youtubeAvailabilityCache = new Map();
+const catalogueQueryCache = new Map();
+function readCatalogueCache(key, ttl) {
+  const entry = catalogueQueryCache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.at >= ttl) { catalogueQueryCache.delete(key); return null; }
+  return entry.data;
+}
+function writeCatalogueCache(key, data) {
+  catalogueQueryCache.set(key, { data, at: Date.now() });
+  while (catalogueQueryCache.size > 120) catalogueQueryCache.delete(catalogueQueryCache.keys().next().value);
+  return data;
+}
 let youtubeMusicBridgeActive = 0;
 function runYoutubeMusicBridge(action, values = {}) {
   if (youtubeMusicBridgeActive >= 3) return Promise.reject(new Error("The music service is busy. Please try again in a moment."));
@@ -534,6 +546,13 @@ function createLocalServer(root) {
       try {
         const query = (requestUrl.searchParams.get("q") || "trending").trim().slice(0, 100);
         const trending = !query || query.toLowerCase() === "trending";
+        const cacheKey = "music:" + (trending ? "trending" : query.toLowerCase());
+        const cachedResult = readCatalogueCache(cacheKey, 180000);
+        if (cachedResult) {
+          res.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "public, max-age=60", "X-ORBIT-Cache": "HIT", "X-Content-Type-Options": "nosniff" });
+          res.end(JSON.stringify(cachedResult));
+          return;
+        }
         const headers = { "User-Agent": "ORBIT/1.0", "Accept": "application/json" };
         const jobs = [];
         jobs.push((async () => {
@@ -574,8 +593,9 @@ function createLocalServer(root) {
         const output = settled.filter(x => x.status === "fulfilled").flatMap(x => x.value);
         const seen = new Set();
         const unique = output.filter(t => { const k=(t.title+"|"+t.artist).toLowerCase().replace(/[^a-z0-9]+/g,""); if(seen.has(k))return false;seen.add(k);return true; });
-        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" });
-        res.end(JSON.stringify({ tracks: unique, providers: { audius: settled[0]?.status === "fulfilled", jamendo: !!JAMENDO_CLIENT_ID, ytmusic: settled[2]?.status === "fulfilled", spotify: false, soundcloud: false, audiomack: false } }));
+        const result = writeCatalogueCache(cacheKey, { tracks: unique, providers: { audius: settled[0]?.status === "fulfilled", jamendo: !!JAMENDO_CLIENT_ID, ytmusic: settled[2]?.status === "fulfilled", spotify: false, soundcloud: false, audiomack: false } });
+        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "public, max-age=60", "X-ORBIT-Cache": "MISS", "X-Content-Type-Options": "nosniff" });
+        res.end(JSON.stringify(result));
       } catch { res.writeHead(502).end("Could not retrieve music catalogue"); }
       return;
     }

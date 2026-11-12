@@ -1402,7 +1402,8 @@ async function boot(){
   const spotifyLink=$("#spotify-orbit-link")?.value;
   if(spotifyLink)spotifyLoadLink(spotifyLink);
   $("#connection-status").textContent="Spinn Radio catalogue ready";
-  await refreshDiscoverUpdates();
+  // Start catalogue retrieval in the background so the desktop interface and saved views are ready immediately.
+  refreshDiscoverUpdates().catch(error=>console.warn("ORBIT background catalogue refresh:",error));
   refreshFavViews();
   window.orbitDiscoverLastRefresh=Date.now();
   window.setInterval(()=>{if(!document.hidden){window.orbitDiscoverLastRefresh=Date.now();refreshDiscoverUpdates();}},10*60*1000);
