@@ -247,12 +247,9 @@ function setupDiscoverUpdates(){
   $("#discover-updates-search")?.addEventListener("input",filterDiscoverUpdates);
   $("#discover-updates-search")?.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();searchDiscoverUpdates(e.currentTarget.value);}});
   $("#discover-updates-refresh")?.addEventListener("click",()=>refreshDiscoverUpdates());
-  // Load fresh catalogues on first setup, then refresh every five minutes while Discover is open.
-  refreshDiscoverUpdates();
-  setInterval(()=>{if(isDiscoverViewActive()&&Date.now()-discoverLastRefreshAt>=DISCOVER_REFRESH_INTERVAL)refreshDiscoverUpdates();},DISCOVER_REFRESH_INTERVAL);
-  document.addEventListener("visibilitychange",()=>{
-    if(isDiscoverViewActive()&&Date.now()-discoverLastRefreshAt>=DISCOVER_REFRESH_INTERVAL)refreshDiscoverUpdates();
-  });
+  // Refresh when the app becomes visible again if the Discover data is stale.
+  const refreshIfDue=()=>{if(isDiscoverViewActive()&&Date.now()-discoverLastRefreshAt>=DISCOVER_REFRESH_INTERVAL)refreshDiscoverUpdates();};
+  document.addEventListener("visibilitychange",refreshIfDue);
 }
 
 function setupOrbitMediaSession(){
@@ -506,7 +503,7 @@ async function loadAudioMusic(term="afrobeats"){
   const host=$("#audio-music-results");
   host.innerHTML='<div class="loading-card">Searching Audius and Jamendo…</div>';
   const q=(term||"trending").trim()||"trending";
-  const response=await fetch("/api/music-search?q="+encodeURIComponent(q),{signal:AbortSignal.timeout(26000)});
+  const response=await fetch("/api/music-search?q="+encodeURIComponent(q),{cache:"no-store",signal:AbortSignal.timeout(45000)});
   if(!response.ok)throw new Error("Music catalogue unavailable");
   const payload=await response.json();
   musicSearchResults=payload.tracks||[];
@@ -514,8 +511,8 @@ async function loadAudioMusic(term="afrobeats"){
   const providers=payload.providers||{};
   const connected=[];
   if(providers.audius)connected.push("Audius");
-  if(providers.jamendo)connected.push("Jamendo");
   if(providers.ytmusic)connected.push("YouTube Music");
+  if(providers.jamendo)connected.push("Jamendo");
   if(!connected.length)connected.push("No providers available");
   if(providers.ytmusic){
     const filters=$("#music-provider-filters");
@@ -543,6 +540,8 @@ function toggleMusicFav(track){
 function playAudioTrack(id){
   const track=musicTrackCache.get(String(id))||musicFavs().find(x=>String(x.id)===String(id));
   if(!track){notify("This track is no longer available.");return;}
+  const failedUntil=youtubeMusicFailureUntil.get(String(track.id))||0;
+  if(track.source==="YouTube Music"&&failedUntil>Date.now()){const seconds=Math.ceil((failedUntil-Date.now())/1000);$("#player-state").textContent="YouTube Music is temporarily unavailable. Try again in "+seconds+" seconds, or choose an Audius track.";notify("YouTube Music is temporarily unavailable. Please try again shortly.");return;}
   clearYoutubePlayer();currentStation=null;currentOfflineAudioId=null;currentMusicTrack=track;musicQueue=[...musicTrackCache.values()];musicQueueIndex=musicQueue.findIndex(x=>String(x.id)===String(track.id));
   musicQueue=[...musicTrackCache.values()];musicQueueIndex=musicQueue.findIndex(x=>String(x.id)===String(track.id));
   youtubeMusicRecoveryForTrack=null;
@@ -552,12 +551,14 @@ function playAudioTrack(id){
   const startPlayback=async()=>{
     if(track.source==="YouTube Music"){
       const videoId=track.videoId||track.providerId||String(track.id).replace(/^ytmusic:/,"");
-      const response=await fetch("/api/youtube-music/stream?videoId="+encodeURIComponent(videoId),{cache:"no-store",signal:AbortSignal.timeout(40000)});
+      $("#player-state").textContent="Loading... please wait while ORBIT connects to YouTube Music.";
+      const response=await fetch("/api/youtube-music/stream?videoId="+encodeURIComponent(videoId),{cache:"no-store",signal:AbortSignal.timeout(45000)});
       const payload=await response.json().catch(()=>({}));
       if(!response.ok||!payload.url)throw new Error(payload.error||"Could not prepare this YouTube Music track.");
       if(currentMusicTrack?.id!==track.id)return;
       audio.src=payload.url;
     }else{
+      $("#player-state").textContent="Connecting to audio stream...";
       audio.src=(track.source==="Audius"||!track.source)?"/api/audius-stream?id="+encodeURIComponent(String(track.providerId||track.id).replace(/^audius:/,"")):(track.playbackUrl||"");
     }
     if(!audio.src)throw new Error("This provider has not enabled playback for this track.");
@@ -570,12 +571,17 @@ function playAudioTrack(id){
   };
   startPlayback().catch(async error=>{
     if(track.source==="YouTube Music"&&youtubeMusicRecoveryForTrack!==track.id){
-      try{await refreshYouTubeMusicStream(track,0);return;}catch{}
+      try{await refreshYouTubeMusicStream(track,0);return;}catch(recoveryError){error=recoveryError;}
     }
-    if(currentMusicTrack?.id===track.id)notify(error.message||"This track could not be streamed. Try another track.");
+    if(currentMusicTrack?.id===track.id){
+      if(track.source==="YouTube Music")youtubeMusicFailureUntil.set(String(track.id),Date.now()+60000);
+      $("#player-state").textContent=track.source==="YouTube Music"?"YouTube Music could not provide this audio right now. Please try again in a minute or choose an Audius track.":(error.message||"This track could not be streamed.");
+      notify(track.source==="YouTube Music"?"YouTube Music is temporarily unavailable. Try Audius or retry in one minute.":(error.message||"This track could not be streamed. Try another track."));
+    }
   });
 }
 let youtubeMusicRecoveryForTrack=null;
+const youtubeMusicFailureUntil=new Map();
 let youtubeMusicRecoveryPromise=null;
 async function refreshYouTubeMusicStream(track,resumeAt=0){
   if(youtubeMusicRecoveryPromise)return youtubeMusicRecoveryPromise;
@@ -1309,6 +1315,9 @@ function setupEvents(){
       refreshYouTubeMusicStream(track,resumeAt).catch(()=>notify("This YouTube Music stream expired and could not be refreshed. Please select the track again."));
     }
   });
+  audio.addEventListener("loadstart",()=>{if(currentMusicTrack?.source==="YouTube Music")$("#player-state").textContent="Loading... please wait while ORBIT fetches the audio stream.";});
+  audio.addEventListener("waiting",()=>{if(currentMusicTrack?.source==="YouTube Music")$("#player-state").textContent="Loading... please wait. Buffering audio.";});
+  audio.addEventListener("canplay",()=>{if(currentMusicTrack?.source==="YouTube Music"&&audio.paused)$("#player-state").textContent="Audio ready. Starting playback...";});
   audio.addEventListener("play",()=>{$("#play-button").classList.add("is-playing");$("#player-state").textContent=currentMusicTrack?"Full audio track":"Now playing";syncOrbitMediaPlaybackState();});
   audio.addEventListener("pause",()=>{$("#play-button").classList.remove("is-playing");syncOrbitMediaPlaybackState();});
   audio.addEventListener("timeupdate",syncOrbitMediaPlaybackState);
