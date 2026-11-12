@@ -427,3 +427,10 @@ html.orbit-desktop-app[data-theme="light"] .orbit-tag { background: #FFFFFF; col
 html.orbit-desktop-app[data-theme="light"] .empty-state,
 html.orbit-desktop-app[data-theme="light"] .loading-card { background: #FFFFFF; color: #64748B; border-color: #CBD5E1; }
 html.orbit-desktop-app[data-theme="light"] :where(button,a,input,select,textarea):focus-visible { outline-color: #2563EB; }
+
+
+/* Restore the native desktop presentation: web download promotions belong on the website only. */
+html.orbit-desktop-app .orbit-download-top,
+html.orbit-desktop-app .orbit-download-cta,
+html.orbit-desktop-app .orbit-mobile-hero-actions { display: none !important; }
+html.orbit-desktop-app .hero-actions { gap: 12px; }

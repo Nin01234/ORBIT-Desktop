@@ -202,11 +202,37 @@ function filterDiscoverUpdates(){
   host.querySelectorAll("[data-discover-kind]").forEach(card=>{const category=card.dataset.discoverKind;const show=(active==="all"||active===category)&&(!query||card.dataset.discoverText.includes(query));card.hidden=!show;if(show)visible++;});
   let empty=host.querySelector(".discover-filter-empty");if(!visible){if(!empty){empty=document.createElement("div");empty.className="empty-state discover-filter-empty";empty.textContent="No updates match this filter. Try another category or search.";host.appendChild(empty);}empty.hidden=false;}else if(empty)empty.hidden=true;
 }
+const DISCOVER_REFRESH_INTERVAL=5*60*1000;
+let discoverRefreshPromise=null;
+let discoverLastRefreshAt=0;
+function isDiscoverViewActive(){return !document.hidden&&$("#view-discover")?.classList.contains("active");}
 async function refreshDiscoverUpdates(){
-  const status=$("#discover-updates-status");if(status)status.textContent="Refreshing catalogues…";
-  const tasks=[loadFeatured(),loadAudioMusic("trending"),loadYouTubeMusic("trending music"),loadItunes("podcasts","top podcasts"),loadBooks(),loadArchiveFilms("trending")];
-  await Promise.all(tasks.map(task=>Promise.resolve(task).then(()=>renderDiscoverUpdates()).catch(()=>{})));
-  renderDiscoverUpdates();
+  if(discoverRefreshPromise)return discoverRefreshPromise;
+  const status=$("#discover-updates-status");
+  if(status)status.textContent="Refreshing connected catalogues…";
+  discoverLastRefreshAt=Date.now();
+  window.orbitDiscoverLastRefresh=discoverLastRefreshAt;
+  discoverRefreshPromise=(async()=>{
+    const tasks=[
+      ()=>loadFeatured(),
+      ()=>loadAudioMusic("trending"),
+      ()=>loadYouTubeMusic("trending music"),
+      ()=>loadItunes("podcasts","top podcasts"),
+      ()=>loadBooks(),
+      ()=>loadArchiveFilms("trending")
+    ];
+    const results=await Promise.allSettled(tasks.map(task=>Promise.resolve().then(task)));
+    renderDiscoverUpdates();
+    const failed=results.filter(result=>result.status==="rejected").length;
+    if(status){
+      const updated=new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"});
+      status.textContent=failed
+        ? "Updated "+updated+" · "+failed+" source"+(failed===1?"":"s")+" unavailable"
+        : "Updated "+updated+" · All connected sources checked";
+    }
+  })();
+  try{return await discoverRefreshPromise;}
+  finally{discoverRefreshPromise=null;}
 }
 async function searchDiscoverUpdates(term){
   const query=String(term||"").trim();if(!query){return refreshDiscoverUpdates();}
@@ -221,7 +247,12 @@ function setupDiscoverUpdates(){
   $("#discover-updates-search")?.addEventListener("input",filterDiscoverUpdates);
   $("#discover-updates-search")?.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();searchDiscoverUpdates(e.currentTarget.value);}});
   $("#discover-updates-refresh")?.addEventListener("click",()=>refreshDiscoverUpdates());
-  document.addEventListener("visibilitychange",()=>{if(!document.hidden&&Date.now()-(window.orbitDiscoverLastRefresh||0)>600000){window.orbitDiscoverLastRefresh=Date.now();refreshDiscoverUpdates();}});
+  // Load fresh catalogues on first setup, then refresh every five minutes while Discover is open.
+  refreshDiscoverUpdates();
+  setInterval(()=>{if(isDiscoverViewActive()&&Date.now()-discoverLastRefreshAt>=DISCOVER_REFRESH_INTERVAL)refreshDiscoverUpdates();},DISCOVER_REFRESH_INTERVAL);
+  document.addEventListener("visibilitychange",()=>{
+    if(isDiscoverViewActive()&&Date.now()-discoverLastRefreshAt>=DISCOVER_REFRESH_INTERVAL)refreshDiscoverUpdates();
+  });
 }
 
 function setupOrbitMediaSession(){
@@ -281,6 +312,7 @@ function showView(name){
   syncAppHistoryButtons();
   $$(".view").forEach(v=>v.classList.toggle("active",v.id==="view-"+name));
   $$(".nav-link[data-view]").forEach(b=>b.classList.toggle("active",b.dataset.view===name));
+  if(name==="discover"&&Date.now()-discoverLastRefreshAt>=DISCOVER_REFRESH_INTERVAL)refreshDiscoverUpdates();
   const labels={discover:"Discover",search:"Search results",globe:"Radio globe",podcasts:"Podcasts",audiobooks:"Audiobooks","global-live":"Global Live",music:"Music", "music-video":"Music Video",movies:"Screen",favorites:"Favourites",downloads:"Downloads",settings:"Settings",omnisave:"OmniSave"};
   $("#page-label").textContent=labels[name]||"Discover";
   if(name==="globe"&&!globeInstance){setTimeout(initGlobe,100);loadStationList();}
@@ -441,7 +473,7 @@ function spotifyEmbed(item){
  frame.style.cssText="display:block;width:100%;height:"+(item.type==="track"?"152px":"352px")+";border:0;border-radius:12px;background:#121212";host.appendChild(frame);
  if(now)now.hidden=false;
  const nowTitle=$("#spotify-orbit-now-title");if(nowTitle)nowTitle.textContent=item.title||("Spotify "+item.type);
- spotifySetStatus("Official Spotify "+item.type+" player loaded.");
+ spotifySetStatus("Spotify "+item.type+" ready to play.");
 }
 function spotifyLoadLink(value){
  const item=spotifyParseLink(value);if(!item){notify("Enter a valid Spotify track, album or playlist link.");return;}
@@ -467,8 +499,8 @@ function musicCard(track){
   const playLabel=track.previewOnly?"Play preview":"Play full track";
   const pid=track.providerId||track.id.replace(/^audius:/,"");
   const streamUrl="/api/audius-stream?id="+encodeURIComponent(pid);
-  const download='<button data-download-track="'+esc(track.id)+'" data-stream-url="'+esc(streamUrl)+'" title="Save for offline playback">↓ Save offline</button>';
-  return '<article class="media-card music-audio-card"><img class="media-cover" src="'+esc(track.artwork||"") + '" alt="" loading="lazy" onerror="this.style.display=\'none\'"><h3 title="'+esc(track.title)+'">'+esc(track.title)+'</h3><p>'+esc(track.artist||"Independent artist")+'  -  '+musicDuration(track.duration)+'</p><div class="media-actions"><small>'+esc(track.source||track.genre||"Audio track")+(track.previewOnly?" · Preview":"")+'</small><div class="music-card-actions"><button data-audio-play="'+esc(track.id)+'">'+playLabel+'</button>'+download+'<button class="heart-button '+(saved?"saved":"")+'" data-audio-fav="'+esc(track.id)+'" title="Save favourite">'+(saved?"\u{1F496}":"\u{1F90D}")+'</button></div></div></article>';
+  const download=track.source==="Audius"?'<button data-download-track="'+esc(track.id)+'" data-stream-url="'+esc(streamUrl)+'" title="Save for offline playback">↓ Save offline</button>':"";
+  return '<article class="media-card music-audio-card orbit-track-card"><div class="orbit-track-art"><img class="media-cover" src="'+esc(track.artwork||"") + '" alt="" loading="lazy" onerror="this.style.display=\'none\'"><button class="orbit-track-play" type="button" data-audio-play="'+esc(track.id)+'" aria-label="Play '+esc(track.title)+'">▶</button></div><div class="orbit-track-copy"><h3 title="'+esc(track.title)+'">'+esc(track.title)+'</h3><p>'+esc(track.artist||"Independent artist")+'</p><div class="orbit-track-meta"><span>'+esc(track.source||track.genre||"Audio track")+(track.previewOnly?" · Preview":"")+'</span><span>'+musicDuration(track.duration)+'</span></div><div class="music-card-actions"><button data-audio-play="'+esc(track.id)+'">'+playLabel+'</button>'+download+'<button class="heart-button '+(saved?"saved":"")+'" data-audio-fav="'+esc(track.id)+'" title="Save favourite">'+(saved?"\u{1F496}":"\u{1F90D}")+'</button></div></div></article>';
 }
 async function loadAudioMusic(term="afrobeats"){
   const host=$("#audio-music-results");
@@ -480,8 +512,20 @@ async function loadAudioMusic(term="afrobeats"){
   musicSearchResults=payload.tracks||[];
   musicSearchResults.forEach(t=>musicTrackCache.set(String(t.id),t));
   const providers=payload.providers||{};
-  const connected=["Audius"];
+  const connected=[];
+  if(providers.audius)connected.push("Audius");
   if(providers.jamendo)connected.push("Jamendo");
+  if(providers.ytmusic)connected.push("YouTube Music");
+  if(!connected.length)connected.push("No providers available");
+  if(providers.ytmusic){
+    const filters=$("#music-provider-filters");
+    if(filters&&!filters.querySelector('[data-music-provider="YouTube Music"]')){
+      const button=document.createElement("button");
+      button.type="button";button.className="pill";button.dataset.musicProvider="YouTube Music";button.textContent="YouTube Music";
+      button.addEventListener("click",()=>{$$("#music-provider-filters .pill").forEach(x=>x.classList.toggle("active",x===button));musicProviderFilter="YouTube Music";renderMusicResults();});
+      filters.appendChild(button);
+    }
+  }
   const waiting=["Spotify","SoundCloud","Audiomack"].filter(Boolean);
   $("#music-provider-status").textContent="Connected: "+connected.join(" · ")+" | Setup needed: "+waiting.join(" · ");
   renderMusicResults();
@@ -501,14 +545,60 @@ function playAudioTrack(id){
   if(!track){notify("This track is no longer available.");return;}
   clearYoutubePlayer();currentStation=null;currentOfflineAudioId=null;currentMusicTrack=track;musicQueue=[...musicTrackCache.values()];musicQueueIndex=musicQueue.findIndex(x=>String(x.id)===String(track.id));
   musicQueue=[...musicTrackCache.values()];musicQueueIndex=musicQueue.findIndex(x=>String(x.id)===String(track.id));
-  audio.src=(track.source==="Audius"||!track.source)?"/api/audius-stream?id="+encodeURIComponent(String(track.providerId||track.id).replace(/^audius:/,"")):(track.playbackUrl||"");
-  if(!audio.src){notify("This provider has not enabled playback for this track.");return;}
-  audio.play().then(()=>{
+  youtubeMusicRecoveryForTrack=null;
+  audio.pause();
+  audio.removeAttribute("src");
+  audio.load();
+  const startPlayback=async()=>{
+    if(track.source==="YouTube Music"){
+      const videoId=track.videoId||track.providerId||String(track.id).replace(/^ytmusic:/,"");
+      const response=await fetch("/api/youtube-music/stream?videoId="+encodeURIComponent(videoId),{cache:"no-store",signal:AbortSignal.timeout(40000)});
+      const payload=await response.json().catch(()=>({}));
+      if(!response.ok||!payload.url)throw new Error(payload.error||"Could not prepare this YouTube Music track.");
+      if(currentMusicTrack?.id!==track.id)return;
+      audio.src=payload.url;
+    }else{
+      audio.src=(track.source==="Audius"||!track.source)?"/api/audius-stream?id="+encodeURIComponent(String(track.providerId||track.id).replace(/^audius:/,"")):(track.playbackUrl||"");
+    }
+    if(!audio.src)throw new Error("This provider has not enabled playback for this track.");
+    await audio.play();
+    if(currentMusicTrack?.id!==track.id)return;
     setPlayer(track.title,track.artist+"  -  "+(track.source||"Music"),track.previewOnly?"Preview playback":"Full audio track");
-    setPlayerArtwork(track.artwork,"\u266b");
-    $("#player-fav").textContent=isMusicFav(track.id)?"\u{1F496}":"\u{1F90D}";
+    setPlayerArtwork(track.artwork,"\\u266b");
+    $("#player-fav").textContent=isMusicFav(track.id)?"\\u{1F496}":"\\u{1F90D}";
     $("#player-fav").classList.toggle("saved",isMusicFav(track.id));
-  }).catch(()=>notify("This track could not be streamed. Try another track."));
+  };
+  startPlayback().catch(async error=>{
+    if(track.source==="YouTube Music"&&youtubeMusicRecoveryForTrack!==track.id){
+      try{await refreshYouTubeMusicStream(track,0);return;}catch{}
+    }
+    if(currentMusicTrack?.id===track.id)notify(error.message||"This track could not be streamed. Try another track.");
+  });
+}
+let youtubeMusicRecoveryForTrack=null;
+let youtubeMusicRecoveryPromise=null;
+async function refreshYouTubeMusicStream(track,resumeAt=0){
+  if(youtubeMusicRecoveryPromise)return youtubeMusicRecoveryPromise;
+  if(!track||track.source!=="YouTube Music")throw new Error("This is not a YouTube Music track.");
+  youtubeMusicRecoveryForTrack=track.id;
+  youtubeMusicRecoveryPromise=(async()=>{
+    const videoId=track.videoId||track.providerId||String(track.id).replace(/^ytmusic:/,"");
+    const response=await fetch("/api/youtube-music/stream?videoId="+encodeURIComponent(videoId),{cache:"no-store",signal:AbortSignal.timeout(40000)});
+    const payload=await response.json().catch(()=>({}));
+    if(!response.ok||!payload.url)throw new Error(payload.error||"The audio stream could not be refreshed.");
+    if(currentMusicTrack?.id!==track.id)return;
+    audio.pause();audio.src=payload.url;audio.load();
+    if(resumeAt>0){
+      await new Promise((resolve,reject)=>{
+        const onMeta=()=>{try{audio.currentTime=Number.isFinite(audio.duration)?Math.min(resumeAt,audio.duration):resumeAt;resolve();}catch(error){reject(error);}};
+        const onError=()=>reject(new Error("The refreshed audio stream could not be loaded."));
+        audio.addEventListener("loadedmetadata",onMeta,{once:true});
+        audio.addEventListener("error",onError,{once:true});
+      });
+    }
+    if(currentMusicTrack?.id===track.id)await audio.play();
+  })();
+  try{return await youtubeMusicRecoveryPromise;}finally{youtubeMusicRecoveryPromise=null;}
 }
 async function refreshOfflineMusicQueue(){offlineMusicQueue=(await getOfflineItems()).filter(x=>String(x.kind||"").toLowerCase()==="audio").sort((a,b)=>a.savedAt-b.savedAt);return offlineMusicQueue;}
 async function playOfflineMusicAt(index){if(!offlineMusicQueue.length){notify("No downloaded music is available.");return;}if(index<0||index>=offlineMusicQueue.length){notify("There are no more downloaded music tracks.");return;}const item=offlineMusicQueue[index];await playOffline(item.id,"audio",item.title);}
@@ -1159,6 +1249,8 @@ function setupEvents(){
   $("#omnisave-open-external")?.addEventListener("click",()=>window.open("https://videodownloader.site/","_blank"));
   $$("[data-go]").forEach(b=>b.addEventListener("click",()=>showView(b.dataset.go)));
   document.addEventListener("click",e=>{
+    const spotifyLoad=e.target.closest("[data-spotify-load]");if(spotifyLoad){spotifyLoadLink($("#spotify-orbit-link")?.value||"");return;}
+    const spotifySave=e.target.closest("[data-spotify-save]");if(spotifySave){spotifySaveCurrent();return;}
     const play=e.target.closest("[data-play]");if(play){playStation(play.dataset.play);return;}
     const fav=e.target.closest("[data-fav]");if(fav){toggleFav(fav.dataset.fav);return;}
     const audioPlay=e.target.closest("[data-audio-play]");if(audioPlay){playAudioTrack(audioPlay.dataset.audioPlay);return;}
@@ -1200,6 +1292,7 @@ function setupEvents(){
   $("#podcast-search").addEventListener("keydown",e=>{if(e.key==="Enter")loadItunes("podcasts",e.target.value.trim()).catch(()=>notify("Podcast search unavailable."));});
   $("#music-video-search").addEventListener("keydown",e=>{if(e.key==="Enter")loadYouTubeMusic(e.target.value.trim()).catch(()=>notify("Music video search unavailable."));});
   $("#audio-music-search").addEventListener("keydown",e=>{if(e.key==="Enter"){$("#audio-music-results").dataset.loaded="";loadAudioMusic(e.target.value.trim()).then(()=>$("#audio-music-results").dataset.loaded="1").catch(()=>notify("Music search unavailable."));}});
+  $("#spotify-orbit-link")?.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();spotifyLoadLink(e.target.value);}});
   $("#movie-search").addEventListener("keydown",e=>{if(e.key==="Enter"){const q=e.target.value.trim();const active=document.querySelector("#view-movies .pill.active")?.dataset.movie;loadArchiveFilms(active==="public-domain"?"public-domain:"+q:q).then(()=>$("#movie-results").dataset.loaded="1").catch(()=>notify("Movie search is temporarily unavailable."));}});
   $("#book-search").addEventListener("keydown",e=>{if(e.key==="Enter")loadBooks(e.target.value.trim());});
   $$("[data-term]").forEach(b=>b.addEventListener("click",()=>{ $$("#view-podcasts .pill").forEach(x=>x.classList.toggle("active",x===b));loadItunes("podcasts",b.dataset.term).catch(()=>notify("Podcast catalogue unavailable."));}));
@@ -1209,6 +1302,13 @@ function setupEvents(){
   $$("#view-music .pill[data-audio-music]").forEach(b=>b.addEventListener("click",()=>{$$("#view-music .pill[data-audio-music]").forEach(x=>x.classList.toggle("active",x===b));$("#audio-music-results").dataset.loaded="";loadAudioMusic(b.dataset.audioMusic).then(()=>$("#audio-music-results").dataset.loaded="1").catch(()=>notify("Music catalogue unavailable."));}));
   $$("#music-provider-filters [data-music-provider]").forEach(b=>b.addEventListener("click",()=>{$$("#music-provider-filters .pill").forEach(x=>x.classList.toggle("active",x===b));musicProviderFilter=b.dataset.musicProvider;renderMusicResults();}));
   setupOrbitMediaSession();
+  audio.addEventListener("error",()=>{
+    const track=currentMusicTrack;
+    if(track?.source==="YouTube Music"&&youtubeMusicRecoveryForTrack!==track.id){
+      const resumeAt=Number(audio.currentTime)||0;
+      refreshYouTubeMusicStream(track,resumeAt).catch(()=>notify("This YouTube Music stream expired and could not be refreshed. Please select the track again."));
+    }
+  });
   audio.addEventListener("play",()=>{$("#play-button").classList.add("is-playing");$("#player-state").textContent=currentMusicTrack?"Full audio track":"Now playing";syncOrbitMediaPlaybackState();});
   audio.addEventListener("pause",()=>{$("#play-button").classList.remove("is-playing");syncOrbitMediaPlaybackState();});
   audio.addEventListener("timeupdate",syncOrbitMediaPlaybackState);
@@ -1290,6 +1390,8 @@ function setupEvents(){
 }
 async function boot(){
   setupEvents();
+  const spotifyLink=$("#spotify-orbit-link")?.value;
+  if(spotifyLink)spotifyLoadLink(spotifyLink);
   $("#connection-status").textContent="Spinn Radio catalogue ready";
   await refreshDiscoverUpdates();
   refreshFavViews();

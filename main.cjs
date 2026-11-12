@@ -35,6 +35,47 @@ const spinnStationCache = new Map();
 let spinnMoviesCache = null;
 let spinnMoviesCacheAt = 0;
 const youtubeAvailabilityCache = new Map();
+let youtubeMusicBridgeActive = 0;
+function runYoutubeMusicBridge(action, values = {}) {
+  if (youtubeMusicBridgeActive >= 3) return Promise.reject(new Error("The music service is busy. Please try again in a moment."));
+  const argsFor = () => action === "search"
+    ? ["search", "--query", String(values.query || "").slice(0, 120)]
+    : ["stream", "--video-id", String(values.videoId || "")];
+  let command, args;
+  if (app.isPackaged) {
+    command = path.join(process.resourcesPath, "orbit-ytmusic-bridge.exe");
+    if (!fs.existsSync(command)) return Promise.reject(new Error("The YouTube Music service is not installed in this ORBIT build."));
+    args = argsFor();
+  } else {
+    const python = path.join(__dirname, ".orbit-ytmusic-venv", "Scripts", "python.exe");
+    const script = path.join(__dirname, "orbit_ytmusic_bridge.py");
+    if (fs.existsSync(python)) { command = python; args = [script, ...argsFor()]; }
+    else { command = "py"; args = ["-3", script, ...argsFor()]; }
+  }
+  return new Promise((resolve, reject) => {
+    youtubeMusicBridgeActive++;
+    let stdout = "", stderr = "", settled = false;
+    const child = spawn(command, args, { windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
+    const finish = (error, value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      youtubeMusicBridgeActive = Math.max(0, youtubeMusicBridgeActive - 1);
+      if (error) reject(error); else resolve(value);
+    };
+    const timer = setTimeout(() => { try { child.kill(); } catch {} finish(new Error("The music service took too long to respond.")); }, 35000);
+    child.stdout.on("data", chunk => { stdout += chunk.toString("utf8"); if (stdout.length > 2 * 1024 * 1024) { try { child.kill(); } catch {} finish(new Error("The music service returned too much data.")); } });
+    child.stderr.on("data", chunk => { if (stderr.length < 12000) stderr += chunk.toString("utf8"); });
+    child.once("error", error => finish(new Error("Could not start the YouTube Music service: " + error.message)));
+    child.once("close", code => {
+      let payload;
+      try { payload = JSON.parse(stdout.trim()); }
+      catch { finish(new Error((stderr.trim() || "The music service returned an invalid response.").slice(0, 500))); return; }
+      if (code !== 0 || payload.error) finish(new Error(String(payload.error || stderr || "The music service failed.").slice(0, 500)));
+      else finish(null, payload);
+    });
+  });
+}
 const JAMENDO_CLIENT_ID = "6e98aa54"; // ORBIT Jamendo application
 
 if (process.argv.includes("--orbit-video-test")) {
@@ -474,6 +515,21 @@ function createLocalServer(root) {
       return;
     }
 
+    if (requestUrl.pathname === "/api/youtube-music/stream") {
+      const videoId = (requestUrl.searchParams.get("videoId") || "").trim();
+      if (!/^[A-Za-z0-9_-]{11}$/.test(videoId)) { res.writeHead(400, { "Cache-Control": "no-store" }).end(JSON.stringify({ error: "Invalid track identifier." })); return; }
+      try {
+        // Always extract again on demand; signed media URLs are deliberately never cached.
+        const payload = await runYoutubeMusicBridge("stream", { videoId });
+        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "Pragma": "no-cache", "X-Content-Type-Options": "nosniff" });
+        res.end(JSON.stringify(payload));
+      } catch (error) {
+        res.writeHead(502, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" });
+        res.end(JSON.stringify({ error: error.message || "Could not prepare this audio stream." }));
+      }
+      return;
+    }
+
     if (requestUrl.pathname === "/api/music-search") {
       try {
         const query = (requestUrl.searchParams.get("q") || "trending").trim().slice(0, 100);
@@ -510,12 +566,16 @@ function createLocalServer(root) {
             permalink: t.shareurl || "", playbackUrl: t.audio, previewOnly: false, canDownload: false
           }));
         })());
+        jobs.push((async () => {
+          const result = await runYoutubeMusicBridge("search", { query: trending ? "trending music" : query });
+          return Array.isArray(result.tracks) ? result.tracks : [];
+        })());
         const settled = await Promise.allSettled(jobs);
         const output = settled.filter(x => x.status === "fulfilled").flatMap(x => x.value);
         const seen = new Set();
         const unique = output.filter(t => { const k=(t.title+"|"+t.artist).toLowerCase().replace(/[^a-z0-9]+/g,""); if(seen.has(k))return false;seen.add(k);return true; });
         res.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" });
-        res.end(JSON.stringify({ tracks: unique, providers: { audius: settled[0]?.status === "fulfilled", jamendo: !!JAMENDO_CLIENT_ID, spotify: false, soundcloud: false, audiomack: false } }));
+        res.end(JSON.stringify({ tracks: unique, providers: { audius: settled[0]?.status === "fulfilled", jamendo: !!JAMENDO_CLIENT_ID, ytmusic: settled[2]?.status === "fulfilled", spotify: false, soundcloud: false, audiomack: false } }));
       } catch { res.writeHead(502).end("Could not retrieve music catalogue"); }
       return;
     }
@@ -901,7 +961,7 @@ function registerOmniSaveDownloads() {
         const total = item.getTotalBytes();
         const received = item.getReceivedBytes();
         const percent = total > 0 ? Math.min(100, Math.round(received * 100 / total)) : null;
-        report({ state: "progress", title: safeBase, received, total, percent, message: percent === null ? "Downloading " + safeBase + "…" : "Downloading " + safeBase + " Ã¢â‚¬â€ " + percent + "%" });
+        report({ state: "progress", title: safeBase, received, total, percent, message: percent === null ? "Downloading " + safeBase + "…" : "Downloading " + safeBase + " — " + percent + "%" });
       } else if (state === "interrupted") {
         report({ state: "error", title: safeBase, message: "Download interrupted. Try again from OmniSave." });
       }
@@ -939,7 +999,7 @@ ipcMain.handle("orbit:spotify-open", async () => {
   }
   spotifyWindow = new BrowserWindow({
     width: 1280, height: 850, minWidth: 900, minHeight: 620,
-    title: "Spotify Ã‚· ORBIT",
+    title: "Spotify · ORBIT",
     backgroundColor: "#121212",
     autoHideMenuBar: true,
     webPreferences: {

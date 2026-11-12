@@ -1,62 +1,85 @@
 {
-  "name": "orbit-radio",
-  "version": "1.1.26",
-  "description": "ORBIT, radio, music, podcasts, audiobooks and films",
-  "main": "main.cjs",
-  "author": "Nino Brown",
-  "license": "MIT",
-  "dependencies": {
-    "qrcode": "^1.5.4"
-  },
-  "scripts": {
-    "start": "electron .",
-    "dev": "electron . --inspect",
-    "dist": "electron-builder --win nsis --x64"
-  },
-  "devDependencies": {
-    "electron": "^44.9.3",
-    "electron-builder": "^26.0.12"
-  },
-  "build": {
-    "appId": "com.orbit.radio",
-    "productName": "ORBIT",
-    "directories": {
-      "output": "dist"
-    },
-    "win": {
-      "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        }
-      ],
-      "icon": "orbit.ico",
-      "artifactName": "ORBIT-Setup-${version}-x64.exe"
-    },
-    "nsis": {
-      "oneClick": true,
-      "perMachine": false,
-      "allowToChangeInstallationDirectory": false,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "shortcutName": "ORBIT",
-      "deleteAppDataOnUninstall": false
-    },
-    "files": [
-      "**/*",
-      "!**/*.bak*",
-      "!**/*.backup-*",
-      "!**/*.before-*",
-      "!**/rollback-backups/**",
-      "!**/dist/**",
-      "!**/release-build/**",
-      "!**/.dev-user-data/**",
-      "!**/.orbit-video-test-profile/**",
-      "!**/*.log",
-      "!ORBIT-WebPreview-Server.cjs",
-      "!**/node_modules/.cache/**"
-    ]
-  }
-}\n
+    "name":  "orbit-radio",
+    "version":  "1.1.27",
+    "description":  "ORBIT, radio, music, podcasts, audiobooks and films",
+    "main":  "main.cjs",
+    "author":  "Nino Brown",
+    "license":  "MIT",
+    "dependencies":  {
+                         "qrcode":  "^1.5.4"
+                     },
+    "scripts":  {
+                    "start":  "electron .",
+                    "dev":  "electron . --inspect",
+                    "dist":  "npm run build:ytmusic \u0026\u0026 electron-builder --win nsis --x64",
+                    "build:ytmusic":  "powershell -NoProfile -ExecutionPolicy Bypass -File build-ytmusic-sidecar.ps1"
+                },
+    "devDependencies":  {
+                            "electron":  "^44.9.3",
+                            "electron-builder":  "^26.0.12"
+                        },
+    "build":  {
+                  "appId":  "com.orbit.radio",
+                  "productName":  "ORBIT",
+                  "directories":  {
+                                      "output":  "dist-youtube-music-1.1.27"
+                                  },
+                  "win":  {
+                              "target":  [
+                                             {
+                                                 "target":  "nsis",
+                                                 "arch":  [
+                                                              "x64"
+                                                          ]
+                                             }
+                                         ],
+                              "icon":  "orbit.ico",
+                              "artifactName":  "ORBIT-Setup-${version}-x64.exe"
+                          },
+                  "nsis":  {
+                               "oneClick":  true,
+                               "perMachine":  false,
+                               "allowToChangeInstallationDirectory":  false,
+                               "createDesktopShortcut":  true,
+                               "createStartMenuShortcut":  true,
+                               "shortcutName":  "ORBIT",
+                               "deleteAppDataOnUninstall":  false
+                           },
+                  "files":  [
+                                "**/*",
+                                "!**/*.bak*",
+                                "!**/*.backup-*",
+                                "!**/*.before-*",
+                                "!**/rollback-backups/**",
+                                "!**/dist/**",
+                                "!**/release-build/**",
+                                "!**/.dev-user-data/**",
+                                "!**/.orbit-video-test-profile/**",
+                                "!**/*.log",
+                                "!ORBIT-WebPreview-Server.cjs",
+                                "!**/node_modules/.cache/**",
+                                "!.orbit-ytmusic-venv/**",
+                                "!sidecar-build/**",
+                                "!sidecar-dist/**",
+                                "!.orbit-music-test-profile/**",
+                                "!.orbit-loading-test-profile/**",
+                                "!.orbit-loading-test-profile-1.1.23/**",
+                                "!_orbit-*/**",
+                                "!_loading-tuning-backup-*/**",
+                                "!**/__pycache__/**",
+                                "!apply-youtube-music-patch.py",
+                                "!finish-youtube-music-patch.py",
+                                "!ytmusic-packaged-test.json",
+                                "!optimized-output-1.1.23/**",
+                                "!optimized-loading-output-1.1.23/**",
+                                "!optimized-loading-test-output-1.1.23/**",
+                                "!dist-youtube-music-1.1.27/**"
+                            ],
+                  "extraResources":  [
+                                         {
+                                             "from":  "sidecar-dist/orbit-ytmusic-bridge.exe",
+                                             "to":  "orbit-ytmusic-bridge.exe"
+                                         }
+                                     ]
+              }
+}
