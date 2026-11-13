@@ -496,7 +496,7 @@ function musicCard(track){
   const playLabel=track.previewOnly?"Play preview":"Play full track";
   const pid=track.providerId||track.id.replace(/^audius:/,"");
   const streamUrl="/api/audius-stream?id="+encodeURIComponent(pid);
-  const download=track.source==="Audius"?'<button data-download-track="'+esc(track.id)+'" data-stream-url="'+esc(streamUrl)+'" title="Save for offline playback">↓ Save offline</button>':"";
+  const download=track.source==="Audius"?'<button data-download-track="'+esc(track.id)+'" data-stream-url="'+esc(streamUrl)+'" title="Save for offline playback">↓ Save offline</button>':track.source==="YouTube Music"?'<button disabled title="YouTube Music does not allow ORBIT to save this stream">Download unavailable</button>':"";
   return '<article class="media-card music-audio-card orbit-track-card"><div class="orbit-track-art"><img class="media-cover" src="'+esc(track.artwork||"") + '" alt="" loading="lazy" onerror="this.style.display=\'none\'"><button class="orbit-track-play" type="button" data-audio-play="'+esc(track.id)+'" aria-label="Play '+esc(track.title)+'">▶</button></div><div class="orbit-track-copy"><h3 title="'+esc(track.title)+'">'+esc(track.title)+'</h3><p>'+esc(track.artist||"Independent artist")+'</p><div class="orbit-track-meta"><span>'+esc(track.source||track.genre||"Audio track")+(track.previewOnly?" · Preview":"")+'</span><span>'+musicDuration(track.duration)+'</span></div><div class="music-card-actions"><button data-audio-play="'+esc(track.id)+'">'+playLabel+'</button>'+download+'<button class="heart-button '+(saved?"saved":"")+'" data-audio-fav="'+esc(track.id)+'" title="Save favourite">'+(saved?"\u{1F496}":"\u{1F90D}")+'</button></div></div></article>';
 }
 async function loadAudioMusic(term="afrobeats"){
