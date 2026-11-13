@@ -35,6 +35,7 @@ const spinnStationCache = new Map();
 let spinnMoviesCache = null;
 let spinnMoviesCacheAt = 0;
 const youtubeAvailabilityCache = new Map();
+const youtubeSearchResultCache = new Map();
 let youtubeMusicBridgeActive = 0;
 function runYoutubeMusicBridge(action, values = {}) {
   if (youtubeMusicBridgeActive >= 3) return Promise.reject(new Error("The music service is busy. Please try again in a moment."));
@@ -766,18 +767,26 @@ function createLocalServer(root) {
       return;
     }
     if (requestUrl.pathname === "/api/youtube-search") {
+      let cacheKey = "", staleEntry = null;
       try {
         const query = (requestUrl.searchParams.get("q") || "").trim().slice(0, 120);
         if (!query) { res.writeHead(400).end("A search term is required"); return; }
+        cacheKey = query.toLowerCase();
+        const cached = youtubeSearchResultCache.get(cacheKey);
+        if (cached && Date.now() - cached.at < 10 * 60 * 1000) {
+          res.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "public, max-age=600", "X-Content-Type-Options": "nosniff" });
+          res.end(JSON.stringify(cached.data)); return;
+        }
+        staleEntry = cached || null;
         const searchUrl = "https://www.youtube.com/results?search_query=" + encodeURIComponent(query);
         const upstream = await fetch(searchUrl, {
           headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36", "Accept-Language": "en-US,en;q=0.9" },
           signal: AbortSignal.timeout(20000)
         });
-        if (!upstream.ok) { res.writeHead(upstream.status).end("YouTube search unavailable"); return; }
+        if (!upstream.ok) throw new Error("YouTube search unavailable");
         const html = await upstream.text();
         const match = html.match(/ytInitialData\s*=\s*(\{.*?\})\s*;\s*<\/script>/s);
-        if (!match) { res.writeHead(502).end("YouTube did not return searchable results"); return; }
+        if (!match) throw new Error("YouTube did not return searchable results");
         const data = JSON.parse(match[1]);
         const found = [];
         const walk = value => {
@@ -842,14 +851,23 @@ function createLocalServer(root) {
             return null;
           }
         };
-        for (let i = 0; i < candidates.length && playable.length < 16; i += 4) {
-          const batch = await Promise.all(candidates.slice(i, i + 4).map(verifyVideo));
+        for (let i = 0; i < candidates.length && playable.length < 16; i += 8) {
+          const batch = await Promise.all(candidates.slice(i, i + 8).map(verifyVideo));
           playable.push(...batch.filter(Boolean));
         }
         if (candidates.length && checksCompleted === 0) throw new Error("YouTube playback verification is temporarily unavailable");
-        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" });
-        res.end(JSON.stringify(playable.slice(0, 16)));
-      } catch { res.writeHead(502).end("Could not retrieve YouTube search results"); }
+        const results = playable.slice(0, 16);
+        youtubeSearchResultCache.set(cacheKey, { data: results, at: Date.now() });
+        if (youtubeSearchResultCache.size > 100) youtubeSearchResultCache.delete(youtubeSearchResultCache.keys().next().value);
+        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "public, max-age=600", "X-Content-Type-Options": "nosniff" });
+        res.end(JSON.stringify(results));
+      } catch {
+        if (staleEntry && Date.now() - staleEntry.at < 7 * 24 * 60 * 60 * 1000) {
+          res.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "public, max-age=60", "X-ORBIT-Stale": "1", "X-Content-Type-Options": "nosniff" });
+          res.end(JSON.stringify(staleEntry.data)); return;
+        }
+        res.writeHead(502).end("Could not retrieve YouTube search results");
+      }
       return;
     }
     if (requestUrl.pathname === "/api/librivox") {
