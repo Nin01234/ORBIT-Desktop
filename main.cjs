@@ -1,4 +1,5 @@
 const { app, BrowserWindow, shell, dialog, ipcMain, session } = require("electron");
+const { autoUpdater } = require("electron-updater");
 const http = require("node:http");
 const { Readable, Transform } = require("node:stream");
 const { pipeline } = require("node:stream/promises");
@@ -1020,6 +1021,14 @@ if (hasSingleInstanceLock) {
       const port = await startLocalServer();
       registerOmniSaveDownloads();
       await createWindow(port);
+      if (app.isPackaged) {
+        autoUpdater.autoDownload = true;
+        autoUpdater.autoInstallOnAppQuit = true;
+        autoUpdater.on("error", error => console.error("ORBIT auto-update error:", error));
+        const checkForUpdates = () => autoUpdater.checkForUpdates().catch(error => console.error("ORBIT update check failed:", error));
+        setTimeout(checkForUpdates, 20000).unref?.();
+        setInterval(checkForUpdates, 6 * 60 * 60 * 1000).unref?.();
+      }
       app.on("activate", async () => {
         if (BrowserWindow.getAllWindows().length === 0) await createWindow(port);
       });
