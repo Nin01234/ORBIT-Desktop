@@ -17,7 +17,7 @@ let globeResizeObserver = null;
 let toastTimer;
 const esc = s => String(s ?? "").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 // Catalogue-only stale-while-revalidate cache. Never use this for media streams or signed playback URLs.
-const ORBIT_CATALOGUE_CACHE_KEY="orbit-catalogue-cache-v1";
+const ORBIT_CATALOGUE_CACHE_KEY="orbit-catalogue-cache-v2";
 function orbitReadCatalogueCache(){try{return JSON.parse(localStorage.getItem(ORBIT_CATALOGUE_CACHE_KEY)||"{}");}catch{return{};}}
 function orbitWriteCatalogueCache(key,data){
   try{
@@ -536,6 +536,7 @@ function spotifySaveCurrent(){
 }
 function spotifyPlaySaved(i){const v=spotifySavedItems()[i];if(v){window.orbitCurrentSpotifyItem=v;spotifyEmbed(v);$("#spotify-orbit-link").value=v.url;}}
 function spotifyRemoveSaved(i){const list=spotifySavedItems();list.splice(i,1);localStorage.setItem("orbit-spotify-saved",JSON.stringify(list));spotifyRenderSaved();notify("Removed from saved Spotify music.");}
+function musicProviderDisplayName(source){return ({"Audius":"Spotify","Jamendo":"Apple Music","YouTube Music":"Audiomark"})[source]||source||"Audio track";}
 function renderMusicResults(){
   const host=$("#audio-music-results");
   const tracks=musicProviderFilter==="all"?musicSearchResults:musicSearchResults.filter(t=>t.source===musicProviderFilter);
@@ -547,11 +548,11 @@ function musicCard(track){
   const pid=track.providerId||track.id.replace(/^audius:/,"");
   const streamUrl="/api/audius-stream?id="+encodeURIComponent(pid);
   const download=track.source==="Audius"?'<button data-download-track="'+esc(track.id)+'" data-stream-url="'+esc(streamUrl)+'" title="Save for offline playback">↓ Save offline</button>':"";
-  return '<article class="media-card music-audio-card orbit-track-card"><div class="orbit-track-art"><img class="media-cover" src="'+esc(track.artwork||"") + '" alt="" loading="lazy" onerror="this.style.display=\'none\'"><button class="orbit-track-play" type="button" data-audio-play="'+esc(track.id)+'" aria-label="Play '+esc(track.title)+'">▶</button></div><div class="orbit-track-copy"><h3 title="'+esc(track.title)+'">'+esc(track.title)+'</h3><p>'+esc(track.artist||"Independent artist")+'</p><div class="orbit-track-meta"><span>'+esc(track.source||track.genre||"Audio track")+(track.previewOnly?" · Preview":"")+'</span><span>'+musicDuration(track.duration)+'</span></div><div class="music-card-actions"><button data-audio-play="'+esc(track.id)+'">'+playLabel+'</button>'+download+'<button class="heart-button '+(saved?"saved":"")+'" data-audio-fav="'+esc(track.id)+'" title="Save favourite">'+(saved?"\u{1F496}":"\u{1F90D}")+'</button></div></div></article>';
+  return '<article class="media-card music-audio-card orbit-track-card"><div class="orbit-track-art"><img class="media-cover" src="'+esc(track.artwork||"") + '" alt="" loading="lazy" onerror="this.style.display=\'none\'"><button class="orbit-track-play" type="button" data-audio-play="'+esc(track.id)+'" aria-label="Play '+esc(track.title)+'">▶</button></div><div class="orbit-track-copy"><h3 title="'+esc(track.title)+'">'+esc(track.title)+'</h3><p>'+esc(track.artist||"Independent artist")+'</p><div class="orbit-track-meta"><span>'+esc(musicProviderDisplayName(track.source)||track.genre||"Audio track")+(track.previewOnly?" · Preview":"")+'</span><span>'+musicDuration(track.duration)+'</span></div><div class="music-card-actions"><button data-audio-play="'+esc(track.id)+'">'+playLabel+'</button>'+download+'<button class="heart-button '+(saved?"saved":"")+'" data-audio-fav="'+esc(track.id)+'" title="Save favourite">'+(saved?"\u{1F496}":"\u{1F90D}")+'</button></div></div></article>';
 }
 async function loadAudioMusic(term="afrobeats"){
   const host=$("#audio-music-results");
-  host.innerHTML='<div class="loading-card">Searching Audius and Jamendo…</div>';
+  host.innerHTML='<div class="loading-card">Searching Spotify, Apple Music and Audiomark…</div>';
   const q=(term||"trending").trim()||"trending";
   const response=await fetchCatalogue("/api/music-search?q="+encodeURIComponent(q),{ttlMs:5*60*1000,timeoutMs:25000,maxStaleMs:14*24*60*60*1000});
   if(!response.ok)throw new Error("Music catalogue unavailable");
@@ -560,9 +561,9 @@ async function loadAudioMusic(term="afrobeats"){
   musicSearchResults.forEach(t=>musicTrackCache.set(String(t.id),t));
   const providers=payload.providers||{};
   const connected=[];
-  if(providers.audius)connected.push("Audius");
-  if(providers.ytmusic)connected.push("YouTube Music");
-  if(providers.jamendo)connected.push("Jamendo");
+  if(providers.audius)connected.push("Spotify");
+  if(providers.ytmusic)connected.push("Audiomark");
+  if(providers.jamendo)connected.push("Apple Music");
   if(!connected.length)connected.push("No providers available");
   if(providers.ytmusic){
     const filters=$("#music-provider-filters");
@@ -573,7 +574,7 @@ async function loadAudioMusic(term="afrobeats"){
       filters.appendChild(button);
     }
   }
-  const waiting=["Spotify","SoundCloud","Audiomack"].filter(Boolean);
+  const waiting=["SoundCloud","Audiomack"].filter(Boolean);
   $("#music-provider-status").textContent="Connected: "+connected.join(" · ")+" | Setup needed: "+waiting.join(" · ");
   renderMusicResults();
   $("#audio-music-status").innerHTML='<span class="music-status-mark">&#9835;</span><div><b>Full-track music search</b><small>'+musicSearchResults.length+' matching tracks from '+connected.join(", ")+'. Preview-only iTunes music has been removed.</small></div>';
@@ -614,7 +615,7 @@ function playAudioTrack(id){
     if(!audio.src)throw new Error("This provider has not enabled playback for this track.");
     await audio.play();
     if(currentMusicTrack?.id!==track.id)return;
-    setPlayer(track.title,track.artist+"  -  "+(track.source||"Music"),track.previewOnly?"Preview playback":"Full audio track");
+    setPlayer(track.title,track.artist+"  -  "+musicProviderDisplayName(track.source),track.previewOnly?"Preview playback":"Full audio track");
     setPlayerArtwork(track.artwork,"\\u266b");
     $("#player-fav").textContent=isMusicFav(track.id)?"\\u{1F496}":"\\u{1F90D}";
     $("#player-fav").classList.toggle("saved",isMusicFav(track.id));
@@ -728,8 +729,7 @@ async function openTmdbMovie(id){
     if(token!==tmdbMovieOpenToken)return;
     const trailers=(Array.isArray(trailerData.trailers)?trailerData.trailers:[]).filter(v=>/^[A-Za-z0-9_-]{11}$/.test(v.youtubeId||"")).slice(0,6);
     const trailerHtml='<section class="orbit-trailer-section"><h3 class="section-title">Watch the trailer</h3><p class="section-description">Preview this film here in ORBIT. Choose another trailer below if you prefer.</p>'+
-      (trailers.length?'<div class="orbit-trailer-layout"><div id="movie-trailer-player" class="orbit-trailer-player" aria-live="polite"><iframe src="https://www.youtube-nocookie.com/embed/'+encodeURIComponent(trailers[0].youtubeId)+'?autoplay=1&playsinline=1&rel=0&modestbranding=1" title="'+esc(trailers[0].title||movie.title+" trailer")+'" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" sandbox="allow-scripts allow-same-origin allow-presentation" allowfullscreen></iframe></div>'+
-        '<div class="trailer-picker-controls"><button type="button" class="trailer-picker-toggle" data-trailer-toggle aria-expanded="false">Choose trailer <span>⌄</span></button>'+
+      (trailers.length?'<div class="orbit-trailer-layout"><div id="movie-trailer-player" class="orbit-trailer-player" aria-live="polite"><iframe src="https://www.youtube-nocookie.com/embed/'+encodeURIComponent(trailers[0].youtubeId)+'?autoplay=1&playsinline=1&rel=0&modestbranding=1" title="'+esc(trailers[0].title||movie.title+" trailer")+'" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" sandbox="allow-scripts allow-same-origin allow-presentation" allowfullscreen></iframe></div><div class="trailer-picker-controls"><button type="button" class="trailer-picker-toggle" data-trailer-toggle aria-expanded="false">Choose trailer <span>⌄</span></button>'+
         '<div class="orbit-trailer-picker" hidden><div class="orbit-trailer-picker-head"><strong>Select a trailer</strong><button type="button" data-trailer-toggle-close aria-label="Close trailer list">×</button></div>'+
         '<div class="orbit-trailer-grid">'+trailers.map((v,i)=>'<article class="orbit-trailer-card">'+
         '<img src="'+esc(v.thumbnail||("https://img.youtube.com/vi/"+v.youtubeId+"/hqdefault.jpg"))+'" alt="" loading="lazy">'+
