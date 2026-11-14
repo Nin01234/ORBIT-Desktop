@@ -7,6 +7,9 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { gunzipSync } = require("node:zlib");
 const { spawn } = require("node:child_process");
+const { downloadYouTube, validateYouTubeUrl } = require("./youtube-download.cjs");
+let ffmpegPath = null;
+try { ffmpegPath = require("ffmpeg-static"); } catch {}
 const mime = { ".html":"text/html; charset=utf-8", ".css":"text/css; charset=utf-8", ".js":"text/javascript; charset=utf-8", ".ico":"image/x-icon", ".png":"image/png", ".webmanifest":"application/manifest+json", ".svg":"image/svg+xml" };
 let localServer;
 let mainWindow;
@@ -119,6 +122,27 @@ ipcMain.handle("orbit:offline-delete",(_event,id)=>{
   try{fs.unlinkSync(target);}catch(error){if(error.code!=="ENOENT")throw error;}
   writeOfflineManifest(list.filter(x=>x.id!==id));
   return true;
+});
+
+ipcMain.handle("orbit:youtube-download", async (_event, item) => {
+  if (!item || item.authorized !== true) throw new Error("Confirm that you own this video or have permission to download it.");
+  const url = validateYouTubeUrl(item.url);
+  const title = String(item.title || "YouTube video").replace(/[<>:"/\\|?*\\x00-\\x1f]/g, "_").slice(0, 120) || "YouTube video";
+  const report = data => { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send("orbit:youtube-download-progress", data); };
+  report({ state: "started", title, message: "Preparing YouTube download…" });
+  try {
+    const result = await downloadYouTube({ url, title, directory: offlineDirectory(), ffmpegPath, onProgress: data => report({ ...data, title, message: "Downloading " + title + "…" }) });
+    const filename = path.basename(result.filepath);
+    const id = require("node:crypto").randomUUID();
+    const record = { id, filename, title, kind: "video", contentType: filename.toLowerCase().endsWith(".webm") ? "video/webm" : "video/mp4", bytes: result.bytes, savedAt: new Date().toISOString(), artwork: typeof item.artwork === "string" ? item.artwork.slice(0, 1500) : "" };
+    const list = readOfflineManifest(); list.unshift(record); writeOfflineManifest(list);
+    report({ state: "completed", title, message: "Saved to ORBIT Downloads: " + title });
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send("orbit:offline-updated", { title });
+    return record;
+  } catch (error) {
+    report({ state: "error", title, message: error.message || "YouTube download failed." });
+    throw error;
+  }
 });
 
 function createLocalServer(root) {
