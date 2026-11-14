@@ -27,7 +27,7 @@ function downloadYouTube({ url, title, directory, ffmpegPath, onProgress }) {
     "--output", output, "--print", "after_move:filepath",
     "--progress", safeUrl
   ];
-  if (ffmpegPath && fs.existsSync(ffmpegPath)) args.splice(6, 0, "--ffmpeg-location", ffmpegPath);
+  if (ffmpegPath && fs.existsSync(ffmpegPath)) args.splice(args.length - 1, 0, "--ffmpeg-location", ffmpegPath);
   return new Promise((resolve, reject) => {
     const child = spawn("yt-dlp", args, { windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "", stderr = "", settled = false;
