@@ -7,12 +7,14 @@
     "license": "MIT",
     "dependencies": {
         "qrcode": "^1.5.4",
-        "electron-updater": "^6.6.2"
+        "electron-updater": "^6.6.2",
+        "ffmpeg-static": "^5.2.0"
     },
     "scripts": {
         "start": "electron .",
         "dev": "electron . --inspect",
-        "dist": "electron-builder --win nsis --x64"
+        "dist": "electron-builder --win nsis --x64",
+        "test": "node --test"
     },
     "devDependencies": {
         "electron": "^44.9.3",
