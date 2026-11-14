@@ -969,6 +969,7 @@ function setupEvents(){
   discoverToggle?.addEventListener("click",e=>{e.preventDefault();e.stopPropagation();const open=discoverGroup.classList.toggle("is-open");discoverToggle.setAttribute("aria-expanded",String(open));});
   document.addEventListener("click",e=>{if(discoverGroup&&!discoverGroup.contains(e.target)){discoverGroup.classList.remove("is-open");discoverToggle?.setAttribute("aria-expanded","false");}});
   window.orbitDesktop?.onOfflineUpdated?.(data=>{loadOfflineLibrary();});
+  window.orbitDesktop?.onYouTubeDownloadProgress?.(data=>{if(data?.state==="completed"){notify(data.message||"Video saved to ORBIT Downloads.");loadOfflineLibrary();}else if(data?.state==="error")notify(data.message||"YouTube download failed.");else if(data?.state==="progress"){const note=$("#music-result-note");if(note)note.textContent="Downloading video: "+Math.round(data.percent||0)+"%";}});
   window.orbitDesktop?.onOmniDownload?.(data=>{const status=$("#omnisave-status");if(status){status.textContent=data?.message||"OmniSave download update.";status.dataset.state=data?.state||"info";}if(data?.state==="completed")notify("Saved to ORBIT Downloads: "+(data?.title||"video"));else if(data?.state==="error")notify(data.message||"Download failed.");});
   const omni=$("#omnisave-webview"),omniStatus=$("#omnisave-status");
   if(omni){
@@ -994,6 +995,7 @@ function setupEvents(){
     const browseFree=e.target.closest("[data-browse-free-movies]");if(browseFree){loadPublicDomainFilms("popular").then(()=>{$("#movie-results").scrollIntoView({behavior:"smooth",block:"start"});}).catch(()=>notify("Free movie catalogue is temporarily unavailable."));return;}
     const filmDetailBack=e.target.closest("[data-film-detail-back]");if(filmDetailBack){closeMobileMovieDetail();return;}
     const tmdbOpen=e.target.closest("[data-tmdb-open]");if(tmdbOpen){openTmdbMovie(tmdbOpen.dataset.tmdbOpen);return;}
+    const ytDownload=e.target.closest("[data-youtube-download]");if(ytDownload){if(!window.orbitDesktop?.downloadYouTube){notify("YouTube downloads are available in the ORBIT desktop app.");return;}if(!window.confirm("Only continue if you own this video or have permission from the rights holder to download it. Do you have that permission?"))return;const btn=ytDownload;btn.disabled=true;btn.textContent="Downloading…";window.orbitDesktop.downloadYouTube({url:"https://www.youtube.com/watch?v="+encodeURIComponent(btn.dataset.youtubeDownload),title:btn.dataset.title,artwork:btn.dataset.artwork,authorized:true}).then(()=>{btn.textContent="Downloaded";}).catch(error=>{notify(error?.message||"Download failed.");btn.textContent="Download";}).finally(()=>{btn.disabled=false;});return;}
     const yt=e.target.closest("[data-youtube]");if(yt){playYouTubeVideo(yt.dataset.youtube,yt.dataset.title,yt.dataset.artist);return;}
     const podcast=e.target.closest("[data-podcast]");if(podcast){loadPodcastEpisodes(podcast.dataset.podcast,podcast.dataset.title);return;}
     const podcastPlay=e.target.closest("[data-podcast-play]");if(podcastPlay){playPodcastEpisode(podcastPlay.dataset.podcastPlay);return;}
