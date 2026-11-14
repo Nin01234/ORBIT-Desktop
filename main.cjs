@@ -101,6 +101,22 @@ if (process.argv.includes("--orbit-video-test")) {
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 if (!hasSingleInstanceLock) app.quit();
 
+function protectPackagedWebContents(contents) {
+  if (!app.isPackaged || !contents || contents.__orbitProtectionInstalled) return;
+  contents.__orbitProtectionInstalled = true;
+  contents.on("context-menu", event => event.preventDefault());
+  contents.on("before-input-event", (event, input) => {
+    const key = String(input.key || "").toLowerCase();
+    const modifier = Boolean(input.control || input.meta);
+    const blocked = key === "f12" ||
+      (modifier && input.shift && ["i", "j", "c", "k"].includes(key)) ||
+      (modifier && key === "u");
+    if (blocked) event.preventDefault();
+  });
+  contents.on("devtools-opened", () => {
+    try { contents.closeDevTools(); } catch {}
+  });
+}
 function focusMainWindow() {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   if (mainWindow.isMinimized()) mainWindow.restore();
@@ -907,7 +923,7 @@ function createLocalServer(root) {
     if (pathname === "/") pathname = "/index.html";
     const target = path.resolve(root, "." + pathname);
     const relativePath = path.relative(root, target).replace(/\\/g, "/");
-    const allowedAsset = ["index.html","styles.css","orbit-feature-additions.css","orbit-ui-fixes-20261109.css","orbit-mobile.css","orbit-mobile-polish.css","orbit-mobile-landing.css","orbit-desktop-refresh.css","orbit-web-refresh.css","orbit-video-enhancement.css","orbit-mobile-hero.svg","orbit-mobile-radio.svg","orbit-mobile-music.svg","orbit-mobile-movies.svg","orbit-mobile-offline.svg","orbit-mobile-podcasts.svg","mobile-bridge.js","app.js","manifest.webmanifest","sw.js","live-podcast.js","orbit-video-enhancement.js"].includes(relativePath) || /^icons\/[A-Za-z0-9._-]+\.png$/i.test(relativePath);
+    const allowedAsset = ["index.html","styles.css","orbit-feature-additions.css","orbit-ui-fixes-20261109.css","orbit-mobile.css","orbit-mobile-polish.css","orbit-mobile-landing.css","orbit-desktop-refresh.css","orbit-web-refresh.css","orbit-video-enhancement.css","orbit-mobile-hero.svg","orbit-mobile-radio.svg","orbit-mobile-music.svg","orbit-mobile-movies.svg","orbit-mobile-offline.svg","orbit-mobile-podcasts.svg","mobile-bridge.min.js","app.min.js","manifest.webmanifest","sw.js","live-podcast.min.js","orbit-video-enhancement.min.js"].includes(relativePath) || /^icons\/[A-Za-z0-9._-]+\.png$/i.test(relativePath);
     if (!target.startsWith(root + path.sep) || !allowedAsset) {
       res.writeHead(404).end("Not found"); return;
     }
@@ -1023,10 +1039,11 @@ ipcMain.handle("orbit:spotify-open", async () => {
     backgroundColor: "#121212",
     autoHideMenuBar: true,
     webPreferences: {
-      partition: "persist:orbit-spotify",
+      partition: "persist:orbit-spotify", devTools: !app.isPackaged,
       contextIsolation: true, nodeIntegration: false, sandbox: true
     }
   });
+  protectPackagedWebContents(spotifyWindow.webContents);
   spotifyWindow.setMenuBarVisibility(false);
   spotifyWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https:\/\/(?:[a-z0-9-]+\.)*spotify\.com\//i.test(url) || /^https:\/\/accounts\.google\.com\//i.test(url)) return { action: "allow" };
@@ -1053,9 +1070,10 @@ async function createWindow(port) {
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
-      contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true, webviewTag: true
+      contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true, webviewTag: true, devTools: !app.isPackaged
     }
   });
+  protectPackagedWebContents(mainWindow.webContents);
   mainWindow.on("enter-full-screen", () => mainWindow?.webContents.send("orbit:fullscreen-changed", true));
   mainWindow.on("leave-full-screen", () => mainWindow?.webContents.send("orbit:fullscreen-changed", false));
   mainWindow.on("enter-html-full-screen", () => {
@@ -1086,6 +1104,7 @@ async function createWindow(port) {
 
   mainWindow.once("ready-to-show", () => { mainWindow.maximize(); mainWindow.show(); });
   mainWindow.webContents.on("did-attach-webview", (_event, webContents) => {
+    protectPackagedWebContents(webContents);
     webContents.setWindowOpenHandler(({ url }) => {
       if (/^https:\/\/(?:[a-z0-9-]+\.)*spotify\.com\//i.test(url) || /^https:\/\/accounts\.google\.com\//i.test(url)) return { action: "allow" };
       if (/^https:\/\//i.test(url)) shell.openExternal(url);
