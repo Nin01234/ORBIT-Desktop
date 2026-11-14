@@ -5,6 +5,8 @@ contextBridge.exposeInMainWorld("orbitDesktop", Object.freeze({
   openSpotify: () => ipcRenderer.invoke("orbit:spotify-open"),
   version: process.env.npm_package_version || "1.0.0",
   downloadMedia: item => ipcRenderer.invoke("orbit:offline-download", item),
+  downloadYouTube: item => ipcRenderer.invoke("orbit:youtube-download", item),
+  onYouTubeDownloadProgress: callback => { if (typeof callback === "function") ipcRenderer.on("orbit:youtube-download-progress", (_event, data) => callback(data)); },
   listOffline: () => ipcRenderer.invoke("orbit:offline-list"),
   deleteOffline: id => ipcRenderer.invoke("orbit:offline-delete", id),
   onOfflineUpdated: callback => { if (typeof callback === "function") ipcRenderer.on("orbit:offline-updated", (_event, data) => callback(data)); },
