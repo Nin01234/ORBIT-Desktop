@@ -1,6 +1,6 @@
 {
   "name": "orbit-radio",
-  "version": "1.1.31",
+  "version": "1.1.32",
   "description": "ORBIT, radio, music, podcasts, audiobooks and films",
   "main": "main.cjs",
   "author": "Nino Brown",
@@ -87,6 +87,12 @@
         "from": "sidecar-dist/orbit-ytmusic-bridge.exe",
         "to": "orbit-ytmusic-bridge.exe"
       }
-    ]
+    ],
+    "publish": {
+      "provider": "github",
+      "owner": "Nin01234",
+      "repo": "ORBIT-Desktop",
+      "releaseType": "release"
+    }
   }
 }
