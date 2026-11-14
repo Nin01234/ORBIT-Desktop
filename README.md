@@ -63,3 +63,14 @@ Nino Brown / ORBIT
 - [Code signing policy](CODE_SIGNING_POLICY.md)
 - [Privacy notice](PRIVACY.md)
 
+
+
+## YouTube video downloads (desktop)
+
+The Music Video cards include a Download action for videos the user owns or is otherwise authorized to download. Downloads are handled by the Electron main process and saved in ORBIT's existing offline library. FFmpeg is supplied through the `ffmpeg-static` dependency and is used by yt-dlp to merge separate audio/video streams when needed.
+
+**yt-dlp is an external prerequisite** and must be installed on the computer and available on `PATH` (or exposed through the `yt-dlp` command). On Windows, install it from the official yt-dlp release page, then restart ORBIT. If yt-dlp is missing, ORBIT displays an installation error instead of silently failing.
+
+The feature validates YouTube URLs, restricts downloads to one video at a time, enforces a 500 MB limit and a 30-minute timeout, and writes completed videos into Downloads. It does not bypass DRM, private-video access, paywalls, or other access controls. Users must have the rights holder's permission to download the selected video.
+
+Run `npm install` after pulling this branch so the new FFmpeg dependency is installed, then run `npm test`.
