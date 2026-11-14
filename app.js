@@ -615,7 +615,7 @@ async function loadYouTubeMusic(term="trending music"){
   host.innerHTML=results.map(x=>{
     const title=x.title||"Untitled track",artist=x.author||"Artist";
     const thumb=x.thumbnail||"";
-    return '<article class="media-card music-video-card"><img class="media-cover" src="'+esc(thumb)+'" alt="" loading="lazy"><h3 title="'+esc(title)+'">'+esc(title)+'</h3><p>'+esc(artist)+' - '+esc(x.length||"")+'</p><div class="media-actions"><small>Music video</small><button data-youtube="'+esc(x.videoId)+'" data-title="'+esc(title)+'" data-artist="'+esc(artist)+'">Play video</button></div></article>';
+    return '<article class="media-card music-video-card"><img class="media-cover" src="'+esc(thumb)+'" alt="" loading="lazy"><h3 title="'+esc(title)+'">'+esc(title)+'</h3><p>'+esc(artist)+' - '+esc(x.length||"")+'</p><div class="media-actions"><small>Music video</small><button data-youtube="'+esc(x.videoId)+'" data-title="'+esc(title)+'" data-artist="'+esc(artist)+'">Play video</button><button data-youtube-download="'+esc(x.videoId)+'" data-title="'+esc(title)+'" data-artwork="'+esc(thumb)+'">Download</button></div></article>';
   }).join("");
 }
 function playYouTubeVideo(id,title,artist){
