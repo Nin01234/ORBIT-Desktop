@@ -1,6 +1,6 @@
 {
   "name": "orbit-radio",
-  "version": "1.1.29",
+  "version": "1.1.31",
   "description": "ORBIT, radio, music, podcasts, audiobooks and films",
   "main": "main.cjs",
   "author": "Nino Brown",
@@ -9,14 +9,16 @@
     "qrcode": "^1.5.4"
   },
   "scripts": {
-    "start": "electron .",
-    "dev": "electron . --inspect",
-    "dist": "npm run build:ytmusic && electron-builder --win nsis --x64",
-    "build:ytmusic": "powershell -NoProfile -ExecutionPolicy Bypass -File build-ytmusic-sidecar.ps1"
+    "start": "npm run build:frontend && electron .",
+    "dev": "npm run build:frontend && electron . --inspect",
+    "dist": "npm run build:frontend && npm run build:ytmusic && electron-builder --win nsis --x64",
+    "build:ytmusic": "powershell -NoProfile -ExecutionPolicy Bypass -File build-ytmusic-sidecar.ps1",
+    "build:frontend": "node build-frontend.cjs"
   },
   "devDependencies": {
     "electron": "^44.9.3",
-    "electron-builder": "^26.0.12"
+    "electron-builder": "^26.0.12",
+    "terser": "^5.51.2"
   },
   "build": {
     "appId": "com.orbit.radio",
@@ -56,6 +58,7 @@
       "!**/.dev-user-data/**",
       "!**/.orbit-video-test-profile/**",
       "!**/*.log",
+      "!**/*.map",
       "!ORBIT-WebPreview-Server.cjs",
       "!**/node_modules/.cache/**",
       "!.orbit-ytmusic-venv/**",
@@ -73,7 +76,11 @@
       "!optimized-output-1.1.23/**",
       "!optimized-loading-output-1.1.23/**",
       "!optimized-loading-test-output-1.1.23/**",
-      "!dist-youtube-music-1.1.27/**"
+      "!dist-youtube-music-1.1.27/**",
+      "!app.js",
+      "!mobile-bridge.js",
+      "!live-podcast.js",
+      "!orbit-video-enhancement.js"
     ],
     "extraResources": [
       {
