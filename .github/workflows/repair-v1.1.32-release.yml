@@ -1,0 +1,80 @@
+﻿name: Repair ORBIT Desktop 1.1.32 release assets
+
+on:
+  push:
+    tags:
+      - 'repair-v1.1.32'
+
+permissions:
+  contents: write
+
+jobs:
+  repair-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Move installer and updater metadata into the primary v1.1.32 release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          repo="Nin01234/ORBIT-Desktop"
+          target_release_id="444999999"
+          source_installer_asset_id="746223533"
+          source_latest_asset_id="746223651"
+          installer="ORBIT-Setup-1.1.32-x64.exe"
+
+          curl --fail --location --retry 3 \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/octet-stream" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${repo}/releases/assets/${source_installer_asset_id}" \
+            --output "${installer}"
+          curl --fail --location --retry 3 \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/octet-stream" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${repo}/releases/assets/${source_latest_asset_id}" \
+            --output latest.yml
+
+          assets_url="https://api.github.com/repos/${repo}/releases/${target_release_id}/assets"
+          current_assets=$(curl --fail --silent --show-error \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" "${assets_url}")
+          if ! echo "${current_assets}" | jq -e --arg n "${installer}" '.[] | select(.name == $n)' >/dev/null; then
+            curl --fail --silent --show-error --request POST \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              -H "Content-Type: application/octet-stream" \
+              --data-binary "@${installer}" \
+              "https://uploads.github.com/repos/${repo}/releases/${target_release_id}/assets?name=${installer}"
+          fi
+          if ! echo "${current_assets}" | jq -e '.[] | select(.name == "latest.yml")' >/dev/null; then
+            curl --fail --silent --show-error --request POST \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              -H "Content-Type: application/octet-stream" \
+              --data-binary @latest.yml \
+              "https://uploads.github.com/repos/${repo}/releases/${target_release_id}/assets?name=latest.yml"
+          fi
+
+          curl --fail --silent --show-error --request PATCH \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -H "Content-Type: application/json" \
+            --data '{"name":"ORBIT Desktop 1.1.32","body":"ORBIT Desktop 1.1.32 includes frontend inspection deterrents, minified renderer assets, and Windows updater metadata. The existing desktop interface and features are preserved."}' \
+            "https://api.github.com/repos/${repo}/releases/${target_release_id}"
+
+          verified_assets=$(curl --fail --silent --show-error \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" "${assets_url}")
+          echo "${verified_assets}" | jq -e '[.[].name] | index("ORBIT-Setup-1.1.32-x64.exe") and index("latest.yml") and index("ORBIT-Setup-1.1.32-x64.exe.blockmap")' >/dev/null
+
+          curl --fail --silent --show-error --request DELETE \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${repo}/releases/445000000"
+          echo "Repaired v1.1.32: installer, latest.yml, and blockmap are now on the primary release."
